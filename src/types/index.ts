@@ -52,16 +52,11 @@ export interface TagMeta {
 
 export interface Settings {
   id: string;                    // Always 'settings' (singleton)
-  apiKeys: {
-    claude?: string;
-    openai?: string;
-    gemini?: string;
-  };
-  defaultModels: {
-    claude: string;
-    openai: string;
-    gemini: string;
-  };
+  theme: 'light' | 'dark' | 'system';
+  apiKeys: Record<string, string>; // Dynamic provider keys
+  defaultModels: Record<string, string>; // Dynamic provider defaults
+  createdAt: number;
+  updatedAt: number;
   lastBackupAt?: number;
 }
 
@@ -117,7 +112,9 @@ export type Provider = 'claude' | 'openai' | 'gemini';
 export interface ModelInfo {
   id: string;                    // API model string
   name: string;                  // Display name
-  provider: Provider;
-  inputCostPer1M: number;        // $ per 1M input tokens
-  outputCostPer1M: number;       // $ per 1M output tokens
+  contextWindow: number;         // Max context tokens
+  supportsStreaming: boolean;    // Streaming support
+  provider?: Provider;           // Optional provider
+  inputCostPer1M?: number;       // $ per 1M input tokens (optional)
+  outputCostPer1M?: number;      // $ per 1M output tokens (optional)
 }

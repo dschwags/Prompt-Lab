@@ -139,6 +139,11 @@ export async function getDB(): Promise<IDBPDatabase> {
 }
 
 /**
+ * Database promise for convenient access
+ */
+export const db = getDB();
+
+/**
  * Close the database connection
  */
 export function closeDB(): void {
