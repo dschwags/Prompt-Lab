@@ -12,12 +12,11 @@ export const ProviderConfig: React.FC<ProviderConfigProps> = ({
   onDefaultModelChange,
 }) => {
   return (
-    <div className="space-y-6">
-      <div className="mb-6">
-        <p className="text-sm text-zinc-400">
-          Select default models for each provider. These will be pre-selected when creating new prompts.
-        </p>
-      </div>
+    <div className="space-y-4">
+      <h3 className="text-lg font-semibold text-gray-900">Default Models</h3>
+      <p className="text-sm text-gray-600">
+        Select default models for each provider. These will be pre-selected when creating new prompts.
+      </p>
 
       {Object.values(PROVIDERS).map((provider) => {
         const hasApiKey = !!settings.apiKeys[provider.id];
@@ -26,19 +25,14 @@ export const ProviderConfig: React.FC<ProviderConfigProps> = ({
         return (
           <div
             key={provider.id}
-            className={`rounded-lg border-2 p-5 transition-all shadow-lg ${
-              hasApiKey 
-                ? 'bg-zinc-950/100 border-zinc-700 hover:border-zinc-600' 
-                : 'bg-zinc-900/100 border-zinc-800 opacity-60'
+            className={`border rounded-lg p-4 ${
+              hasApiKey ? 'border-gray-200' : 'border-gray-100 bg-gray-50'
             }`}
-            style={{ backgroundColor: hasApiKey ? 'rgb(9, 9, 11)' : 'rgb(24, 24, 27)' }}
           >
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-base font-bold text-zinc-200">{provider.name}</span>
+            <div className="flex items-center justify-between mb-2">
+              <span className="font-medium text-gray-900">{provider.name}</span>
               {!hasApiKey && (
-                <span className="px-3 py-1 text-[10px] uppercase tracking-wider text-amber-300 bg-amber-500/20 border border-amber-500/50 rounded-md font-bold">
-                  API key not configured
-                </span>
+                <span className="text-xs text-gray-500">⚠️ API key not configured</span>
               )}
             </div>
 
@@ -46,12 +40,11 @@ export const ProviderConfig: React.FC<ProviderConfigProps> = ({
               value={defaultModel || ''}
               onChange={(e) => onDefaultModelChange(provider.id, e.target.value)}
               disabled={!hasApiKey}
-              className="w-full px-4 py-3 bg-zinc-900/100 border-2 border-zinc-700 rounded-lg text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 disabled:cursor-not-allowed disabled:opacity-50 font-mono transition-all"
-              style={{ backgroundColor: 'rgb(24, 24, 27)' }}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
             >
-              <option value="" className="text-zinc-500">No default selected</option>
+              <option value="">No default selected</option>
               {provider.models.map((model) => (
-                <option key={model.id} value={model.id} className="text-zinc-200 bg-zinc-900">
+                <option key={model.id} value={model.id}>
                   {model.name} ({(model.contextWindow / 1000).toFixed(0)}K context)
                 </option>
               ))}

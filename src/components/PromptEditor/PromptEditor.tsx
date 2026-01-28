@@ -11,6 +11,13 @@ interface Response {
   model: string;
 }
 
+// Model options for dropdown
+const CLAUDE_MODELS = [
+  { id: 'claude-opus-4-20251101', name: 'Opus 4.5 (Most capable)', description: 'Best for complex tasks' },
+  { id: 'claude-sonnet-4-20250514', name: 'Sonnet 4.5 (Balanced)', description: 'Default - balanced intelligence' },
+  { id: 'claude-haiku-4-20251001', name: 'Haiku 4.5 (Fast & economical)', description: 'Fast and cost-effective' },
+];
+
 export function PromptEditor() {
   const {
     systemPrompt,
@@ -26,6 +33,17 @@ export function PromptEditor() {
   const [isLoading, setIsLoading] = useState(false);
   const [response, setResponse] = useState<Response | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Model selection state with localStorage persistence
+  const [selectedModel, setSelectedModel] = useState<string>(() => {
+    return localStorage.getItem('selectedModel') || CLAUDE_MODELS[1].id; // Default to Sonnet 4.5
+  });
+
+  // Persist model selection
+  const handleModelChange = (modelId: string) => {
+    setSelectedModel(modelId);
+    localStorage.setItem('selectedModel', modelId);
+  };
 
   // Initialize a new prompt on mount if none exists
   useEffect(() => {
@@ -74,7 +92,7 @@ export function PromptEditor() {
       setError(null);
       setResponse(null);
 
-      const result = await sendPromptToClaude(systemPrompt, userPrompt, apiKey);
+      const result = await sendPromptToClaude(systemPrompt, userPrompt, apiKey, selectedModel);
       setResponse(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send prompt');
@@ -83,57 +101,71 @@ export function PromptEditor() {
     }
   };
 
-  // Handle Cmd+Enter or Enter keyboard shortcut
+  // Handle Cmd+Enter keyboard shortcut
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      // Cmd+Enter for macOS, Ctrl+Enter for Windows/Linux, or just Enter
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-        e.preventDefault();
-        handleSend();
-      } else if (e.key === 'Enter' && !e.shiftKey && e.currentTarget.id === 'user-prompt') {
-        // Plain Enter in user prompt (Shift+Enter for newline)
         e.preventDefault();
         handleSend();
       }
     },
-    [systemPrompt, userPrompt]
+    [systemPrompt, userPrompt, selectedModel]
   );
 
   return (
-    <div className="flex flex-col h-full bg-zinc-900 text-zinc-100 font-mono">
-      {/* IDE-Style Header with Status Bar */}
-      <div className="flex items-center justify-between px-6 py-3 bg-zinc-950 border-b border-zinc-800">
-        <div className="flex items-center gap-3">
-          <h2 className="text-sm font-semibold text-zinc-300 tracking-wide">PROMPT EDITOR</h2>
-          
-          {/* Status Badges */}
-          <div className="flex items-center gap-2">
-            <span className="px-2 py-0.5 text-xs bg-zinc-800/50 border border-zinc-700/50 rounded text-zinc-400">
-              ~{combinedTokens.toLocaleString()} tok
+    <div className="flex flex-col h-full gap-4">
+      {/* Header with Combined Stats */}
+      <div className="flex items-center justify-between p-4 bg-white border-b border-gray-200">
+        <div className="flex items-center gap-6">
+          <h2 className="text-lg font-semibold text-gray-900">Prompt Editor</h2>
+          <div className="flex items-center gap-4 text-sm">
+            <span className="text-gray-600">
+              Total: <span className="font-medium text-gray-900">~{combinedTokens.toLocaleString()} tokens</span>
             </span>
-            <span className="px-2 py-0.5 text-xs bg-emerald-950/30 border border-emerald-800/30 rounded text-emerald-400">
-              ${estimatedCostInput.toFixed(4)}
+            <span className="text-gray-400">|</span>
+            <span className="text-gray-600">
+              Est. Cost: <span className="font-medium text-green-600">${estimatedCostInput.toFixed(4)}</span>
             </span>
-            {isSaving ? (
-              <span className="px-2 py-0.5 text-xs bg-amber-950/30 border border-amber-800/30 rounded text-amber-400 animate-pulse">
-                saving...
-              </span>
-            ) : lastSaved ? (
-              <span className="px-2 py-0.5 text-xs bg-zinc-800/30 border border-zinc-700/30 rounded text-zinc-500">
-                {lastSaved.toLocaleTimeString()}
-              </span>
-            ) : null}
           </div>
+        </div>
+        <div className="flex items-center gap-3">
+          {/* Model Selection Dropdown */}
+          <select
+            value={selectedModel}
+            onChange={(e) => handleModelChange(e.target.value)}
+            className="bg-zinc-800 text-zinc-50 border border-zinc-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            {CLAUDE_MODELS.map((model) => (
+              <option key={model.id} value={model.id}>
+                {model.name}
+              </option>
+            ))}
+          </select>
+          {isSaving && (
+            <span className="text-xs text-gray-500">Saving...</span>
+          )}
+          {!isSaving && lastSaved && (
+            <span className="text-xs text-gray-500">
+              Saved {lastSaved.toLocaleTimeString()}
+            </span>
+          )}
+          <button
+            onClick={handleSend}
+            disabled={isLoading}
+            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isLoading ? 'Sending...' : 'Send (⌘↵)'}
+          </button>
         </div>
       </div>
 
-      {/* Input Deck - IDE Console Style */}
-      <div className="flex flex-col gap-0 flex-1 overflow-auto">
-        {/* System Prompt Panel */}
-        <div className="border-b border-zinc-800/50">
-          <div className="flex items-center justify-between px-4 py-2 bg-zinc-900/50">
-            <label className="text-xs uppercase tracking-wider text-zinc-500 font-semibold">
-              System Prompt <span className="text-zinc-600 font-normal">(optional)</span>
+      {/* Editor Content */}
+      <div className="flex flex-col gap-4 p-4 flex-1 overflow-auto">
+        {/* System Prompt */}
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium text-gray-700">
+              System Prompt <span className="text-gray-400">(optional)</span>
             </label>
             <TokenCounter characterCount={systemPrompt.length} label="System" />
           </div>
@@ -141,120 +173,80 @@ export function PromptEditor() {
             value={systemPrompt}
             onChange={(e) => setSystemPrompt(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="// Enter system-level instructions (role, behavior, constraints)..."
-            className="w-full h-28 px-4 py-3 bg-zinc-950/50 text-zinc-300 text-sm border-none focus:outline-none focus:ring-2 focus:ring-blue-500/30 resize-none font-mono placeholder:text-zinc-700 placeholder:italic"
+            placeholder="Enter system-level instructions (e.g., role, behavior, constraints)..."
+            className="w-full h-32 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y font-mono"
           />
         </div>
 
-        {/* User Prompt Panel with Integrated Send */}
-        <div className="flex-1 flex flex-col border-b border-zinc-800/50 relative">
-          <div className="flex items-center justify-between px-4 py-2 bg-zinc-900/50">
-            <label className="text-xs uppercase tracking-wider text-zinc-500 font-semibold">
+        {/* User Prompt */}
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium text-gray-700">
               User Prompt
             </label>
             <TokenCounter characterCount={userPrompt.length} label="User" />
           </div>
-          <div className="relative flex-1">
-            <textarea
-              id="user-prompt"
-              value={userPrompt}
-              onChange={(e) => setUserPrompt(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="// Enter your prompt... (Press Enter or ⌘+Enter to send, Shift+Enter for newline)"
-              className="w-full h-full px-4 py-3 pb-16 bg-zinc-950/50 text-zinc-300 text-sm border-none focus:outline-none focus:ring-2 focus:ring-blue-500/30 resize-none font-mono placeholder:text-zinc-700 placeholder:italic"
-            />
-            
-            {/* Integrated Send Button - Bottom Right of Textarea */}
-            <div className="absolute bottom-3 right-3 flex items-center gap-2">
-              <span className="text-[10px] text-zinc-600 uppercase tracking-wider">
-                Enter to send
-              </span>
-              <button
-                onClick={handleSend}
-                disabled={isLoading}
-                className="px-4 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white rounded border border-blue-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-lg shadow-blue-900/20"
-                title="Send prompt (Enter or ⌘+Enter)"
-              >
-                {isLoading ? (
-                  <>
-                    <div className="animate-spin h-3 w-3 border-2 border-white border-t-transparent rounded-full"></div>
-                    SENDING
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                    </svg>
-                    SEND
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
+          <textarea
+            value={userPrompt}
+            onChange={(e) => setUserPrompt(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Enter your prompt here... (Press Cmd+Enter to send)"
+            className="w-full min-h-[200px] px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y font-mono"
+          />
         </div>
 
-        {/* Response Output Panel - IDE Style */}
+        {/* Response Section */}
         {(isLoading || error || response) && (
-          <div className="border-t border-zinc-800">
-            <div className="flex items-center justify-between px-4 py-2 bg-zinc-900/70">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                <span className="text-xs uppercase tracking-wider text-zinc-500 font-semibold">
-                  Output
-                </span>
+          <div className="flex flex-col gap-2">
+            <h3 className="text-sm font-medium text-gray-700">Response</h3>
+            
+            {/* Loading */}
+            {isLoading && (
+              <div className="p-6 bg-white border border-gray-200 rounded-lg">
+                <div className="flex items-center gap-2 text-gray-600">
+                  <div className="animate-spin h-4 w-4 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+                  <span>Waiting for Claude...</span>
+                </div>
               </div>
-              
-              {/* Response Metadata Badges */}
-              {response && !isLoading && (
-                <div className="flex items-center gap-2 text-[10px]">
-                  <span className="px-2 py-0.5 bg-zinc-800/50 border border-zinc-700/50 rounded text-zinc-400">
-                    {response.model}
-                  </span>
-                  <span className="px-2 py-0.5 bg-zinc-800/50 border border-zinc-700/50 rounded text-zinc-400">
-                    in: {response.tokensIn.toLocaleString()}
-                  </span>
-                  <span className="px-2 py-0.5 bg-zinc-800/50 border border-zinc-700/50 rounded text-zinc-400">
-                    out: {response.tokensOut.toLocaleString()}
-                  </span>
-                  <span className="px-2 py-0.5 bg-emerald-950/30 border border-emerald-800/30 rounded text-emerald-400">
-                    ${((response.tokensIn / 1_000_000) * 3 + (response.tokensOut / 1_000_000) * 15).toFixed(4)}
+            )}
+
+            {/* Error */}
+            {error && (
+              <div className="p-6 bg-red-50 border border-red-200 rounded-lg">
+                <h4 className="text-sm font-semibold text-red-900 mb-2">Error</h4>
+                <p className="text-sm text-red-700">{error}</p>
+              </div>
+            )}
+
+            {/* Response */}
+            {response && !isLoading && (
+              <div className="flex flex-col gap-4">
+                {/* Stats */}
+                <div className="flex items-center gap-4 text-xs text-gray-600 px-3">
+                  <span className="font-medium">{response.model}</span>
+                  <span>In: {response.tokensIn.toLocaleString()} tokens</span>
+                  <span>Out: {response.tokensOut.toLocaleString()} tokens</span>
+                  <span className="text-green-600 font-medium">
+                    Cost: ${((response.tokensIn / 1_000_000) * 3 + (response.tokensOut / 1_000_000) * 15).toFixed(4)}
                   </span>
                 </div>
-              )}
-            </div>
 
-            <div className="px-4 py-4 bg-zinc-950/30 max-h-[400px] overflow-auto">
-              {/* Loading State */}
-              {isLoading && (
-                <div className="flex items-center gap-3 text-zinc-500">
-                  <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
-                  <span className="text-sm">Waiting for Claude...</span>
+                {/* Content */}
+                <div className="p-6 bg-white border border-gray-200 rounded-lg">
+                  <pre className="whitespace-pre-wrap font-sans text-sm text-gray-900">
+                    {response.content}
+                  </pre>
                 </div>
-              )}
-
-              {/* Error State */}
-              {error && (
-                <div className="p-4 bg-red-950/20 border border-red-800/30 rounded text-red-400 text-sm font-mono">
-                  <div className="font-semibold mb-1 text-red-300">ERROR</div>
-                  {error}
-                </div>
-              )}
-
-              {/* Success Response */}
-              {response && !isLoading && (
-                <pre className="whitespace-pre-wrap font-mono text-sm text-zinc-300 leading-relaxed">
-                  {response.content}
-                </pre>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         )}
       </div>
 
-      {/* Footer Hint Bar */}
-      <div className="px-4 py-2 bg-zinc-950 border-t border-zinc-800/50 flex items-center justify-between">
-        <p className="text-[10px] text-zinc-600 uppercase tracking-wider">
-          💡 <kbd className="px-1.5 py-0.5 text-[10px] font-semibold text-zinc-500 bg-zinc-800/50 border border-zinc-700/30 rounded">Enter</kbd> or <kbd className="px-1.5 py-0.5 text-[10px] font-semibold text-zinc-500 bg-zinc-800/50 border border-zinc-700/30 rounded">⌘ Enter</kbd> to send
+      {/* Footer Help Text */}
+      <div className="px-4 py-2 bg-gray-50 border-t border-gray-200">
+        <p className="text-xs text-gray-500">
+          💡 Tip: Press <kbd className="px-1.5 py-0.5 text-xs font-semibold text-gray-800 bg-gray-100 border border-gray-200 rounded">⌘ Enter</kbd> to send your prompt
         </p>
       </div>
     </div>

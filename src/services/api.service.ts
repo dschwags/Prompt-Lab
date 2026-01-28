@@ -12,12 +12,13 @@ interface ClaudeResponse {
 
 /**
  * Send a prompt to Claude and get a response
- * Uses Claude Sonnet 4.5 by default
+ * Uses specified Claude model
  */
 export async function sendPromptToClaude(
   systemPrompt: string,
   userPrompt: string,
-  apiKey: string
+  apiKey: string,
+  model: string
 ): Promise<ClaudeResponse> {
   
   const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -29,7 +30,7 @@ export async function sendPromptToClaude(
       'anthropic-dangerous-direct-browser-access': 'true', // Required for browser calls
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514', // Hardcoded for MVP
+      model: model, // Dynamic model selection
       max_tokens: 4096,
       system: systemPrompt || undefined, // Only include if not empty
       messages: [

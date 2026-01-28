@@ -1,0 +1,202 @@
+Phase B Feature #1: Claude Model Selection Dropdown
+
+GOAL:
+Add dropdown to select which Claude model to use when sending prompts.
+User can choose intelligence level vs cost tradeoff.
+
+CURRENT STATE:
+- Hardcoded to: claude-sonnet-4-20250514
+- No way to test different models
+
+NEW STATE:
+- Dropdown with 3 Claude models
+- User selects before sending
+- Choice persists across sessions
+- Response shows which model was used
+
+═══════════════════════════════════════════════════════════
+
+MODELS TO SUPPORT:
+
+1. Claude Opus 4.5 (Most Capable)
+   - Model ID: claude-opus-4-20251101
+   - Description: "Most capable, best for complex tasks"
+   - Pricing: Higher
+   
+2. Claude Sonnet 4.5 (Balanced) - DEFAULT
+   - Model ID: claude-sonnet-4-20250514
+   - Description: "Balanced intelligence and speed"
+   - Pricing: Medium
+   
+3. Claude Haiku 4.5 (Fast & Economical)
+   - Model ID: claude-haiku-4-20251001
+   - Description: "Fast and cost-effective"
+   - Pricing: Lower
+
+═══════════════════════════════════════════════════════════
+
+UI DESIGN:
+
+Location: In PromptEditor, add dropdown near the Send button
+
+Layout:
+┌─────────────────────────────────────────────────┐
+│ USER PROMPT                   User: XX chars   │
+│ [Your prompt text here...]                     │
+│                                                 │
+│                                                 │
+│ [Model: Sonnet 4.5 ▼]              [Send (⌘↵)]│
+└─────────────────────────────────────────────────┘
+
+Dropdown options should show:
+- Opus 4.5 (Most capable)
+- Sonnet 4.5 (Balanced) ← default
+- Haiku 4.5 (Fast & economical)
+
+═══════════════════════════════════════════════════════════
+
+IMPLEMENTATION DETAILS:
+
+1. STATE MANAGEMENT:
+   - Add selectedModel state to PromptEditor
+   - Default: 'claude-sonnet-4-20250514'
+   - Save to localStorage: 'selectedModel'
+   - Load from localStorage on component mount
+
+2. DROPDOWN COMPONENT:
+   - Use HTML <select> or build custom dropdown
+   - Style to match existing UI (dark theme)
+   - Show friendly names in dropdown
+   - Store model IDs in state
+
+3. API INTEGRATION:
+   - Update api.service.ts sendMessage function
+   - Add model parameter: sendMessage(systemPrompt, userPrompt, model)
+   - Use selected model instead of hardcoded value
+
+4. RESPONSE DISPLAY:
+   - Show which model was used in response header
+   - Format: "claude-sonnet-4-20250514"
+   - Include in existing model display
+
+═══════════════════════════════════════════════════════════
+
+FILES TO MODIFY:
+
+1. src/components/PromptEditor/PromptEditor.tsx
+   - Add selectedModel state
+   - Add dropdown UI component
+   - Pass selectedModel to sendMessage
+   - Persist selection to localStorage
+
+2. src/services/api.service.ts
+   - Add model parameter to sendMessage function
+   - Use dynamic model instead of hardcoded
+
+3. src/components/PromptEditor/ResponseViewer.tsx (if needed)
+   - Ensure model name displays correctly
+
+═══════════════════════════════════════════════════════════
+
+STYLING REQUIREMENTS:
+
+- Match existing dark theme
+- Dropdown: bg-zinc-800, text-zinc-50
+- Border: border-zinc-600
+- Focus: ring-blue-500
+- Match existing component spacing
+
+Example styling:
+```tsx
+<select 
+  className="bg-zinc-800 text-zinc-50 border border-zinc-600 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+>
+```
+
+═══════════════════════════════════════════════════════════
+
+PERSISTENCE:
+
+On mount:
+```typescript
+const savedModel = localStorage.getItem('selectedModel');
+setSelectedModel(savedModel || 'claude-sonnet-4-20250514');
+```
+
+On change:
+```typescript
+const handleModelChange = (model: string) => {
+  setSelectedModel(model);
+  localStorage.setItem('selectedModel', model);
+};
+```
+
+═══════════════════════════════════════════════════════════
+
+VERIFICATION STEPS:
+
+After implementation, verify:
+1. [ ] Dropdown appears near Send button
+2. [ ] Shows 3 models with friendly names
+3. [ ] Default selection is Sonnet 4.5
+4. [ ] Can change selection
+5. [ ] Selection persists after page reload
+6. [ ] Send uses selected model
+7. [ ] Response shows correct model ID
+8. [ ] Test all 3 models work:
+   - Send prompt with Opus → Get response
+   - Send prompt with Sonnet → Get response
+   - Send prompt with Haiku → Get response
+9. [ ] Token counts accurate for each model
+10. [ ] Cost calculations correct
+
+═══════════════════════════════════════════════════════════
+
+TEST CASES:
+
+Test 1: Default behavior
+- Open app fresh
+- Should show "Sonnet 4.5" selected
+- Send prompt
+- Should use claude-sonnet-4-20250514
+
+Test 2: Change model
+- Select "Opus 4.5"
+- Send prompt
+- Response should show claude-opus-4-20251101
+
+Test 3: Persistence
+- Select "Haiku 4.5"
+- Refresh page
+- Should still show "Haiku 4.5" selected
+
+Test 4: All models work
+- Test with simple prompt: "Say hello in 5 words"
+- Try Opus → Should respond
+- Try Sonnet → Should respond  
+- Try Haiku → Should respond
+
+═══════════════════════════════════════════════════════════
+
+SUCCESS CRITERIA:
+
+✅ Dropdown visible and functional
+✅ Can select any of 3 models
+✅ Selection persists across sessions
+✅ Prompts send to selected model
+✅ Responses show correct model
+✅ All 3 models work successfully
+✅ UI matches existing design
+✅ No breaking changes to existing features
+
+═══════════════════════════════════════════════════════════
+
+NOTES:
+
+- Keep it simple - just a dropdown, no fancy UI
+- Don't break existing send functionality
+- Preserve token counting and cost display
+- Match existing dark theme styling
+- Test with real API calls before marking complete
+
+ESTIMATED EFFORT: 40-60 credits

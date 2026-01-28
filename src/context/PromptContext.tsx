@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 import { Prompt, PromptVersion } from '../types';
 import { generateUUID } from '../utils/uuid';
 import { getDB } from '../services/db.service';
@@ -22,47 +22,16 @@ export function PromptProvider({ children }: { children: ReactNode }) {
   const [currentVersion, setCurrentVersion] = useState<PromptVersion | null>(null);
   const [systemPrompt, setSystemPromptState] = useState('');
   const [userPrompt, setUserPromptState] = useState('');
-  const [isInitialized, setIsInitialized] = useState(false);
 
-  // Load most recent prompt on mount
-  useEffect(() => {
-    async function loadMostRecentPrompt() {
-      try {
-        const db = await getDB();
-        
-        // Get all prompts sorted by updatedAt (most recent first)
-        const allPrompts = await db.getAllFromIndex('prompts', 'by-updatedAt');
-        
-        if (allPrompts.length > 0) {
-          // Get the most recent prompt
-          const recentPrompt = allPrompts[allPrompts.length - 1]; // Last item is most recent
-          
-          // Get its current version
-          const version = await db.get('promptVersions', recentPrompt.currentVersionId);
-          
-          if (version) {
-            setCurrentPrompt(recentPrompt);
-            setCurrentVersion(version);
-            setSystemPromptState(version.systemPrompt);
-            setUserPromptState(version.userPrompt);
-            setIsInitialized(true);
-            return;
-          }
-        }
-        
-        // No prompts found, create a new one
-        createNewPromptInternal();
-      } catch (error) {
-        console.error('Error loading prompt:', error);
-        // If error, create new prompt
-        createNewPromptInternal();
-      }
-    }
+  const setSystemPrompt = useCallback((value: string) => {
+    setSystemPromptState(value);
+  }, []);
 
-    loadMostRecentPrompt();
-  }, []); // Run once on mount
+  const setUserPrompt = useCallback((value: string) => {
+    setUserPromptState(value);
+  }, []);
 
-  const createNewPromptInternal = useCallback(() => {
+  const createNewPrompt = useCallback(() => {
     const now = Date.now();
     const promptId = generateUUID();
     const versionId = generateUUID();
@@ -91,20 +60,7 @@ export function PromptProvider({ children }: { children: ReactNode }) {
     setCurrentVersion(newVersion);
     setSystemPromptState('');
     setUserPromptState('');
-    setIsInitialized(true);
   }, []);
-
-  const setSystemPrompt = useCallback((value: string) => {
-    setSystemPromptState(value);
-  }, []);
-
-  const setUserPrompt = useCallback((value: string) => {
-    setUserPromptState(value);
-  }, []);
-
-  const createNewPrompt = useCallback(() => {
-    createNewPromptInternal();
-  }, [createNewPromptInternal]);
 
   const savePrompt = useCallback(async () => {
     if (!currentPrompt || !currentVersion) return;
@@ -159,11 +115,6 @@ export function PromptProvider({ children }: { children: ReactNode }) {
     setSystemPromptState(version.systemPrompt);
     setUserPromptState(version.userPrompt);
   }, []);
-
-  // Don't render children until initialized
-  if (!isInitialized) {
-    return <div>Loading...</div>;
-  }
 
   return (
     <PromptContext.Provider
