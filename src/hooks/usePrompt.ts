@@ -7,7 +7,7 @@ import { usePromptContext } from '../context/PromptContext';
  */
 export function usePrompt() {
   const context = usePromptContext();
-  const saveTimeoutRef = useRef<number>();
+  const saveTimeoutRef = useRef<number | undefined>(undefined);
 
   // Debounced auto-save effect
   useEffect(() => {
