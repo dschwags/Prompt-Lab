@@ -1,254 +1,321 @@
-import { useEffect, useState, useCallback } from 'react';
+/**
+ * Prompt Editor with Multi-Provider Support
+ * Supports: Anthropic (Claude), OpenAI (GPT), Google (Gemini), OpenRouter
+ */
+
+import { useState, useCallback, useEffect } from 'react';
 import { usePrompt } from '../../hooks/usePrompt';
 import { TokenCounter } from './TokenCounter';
-import { sendPromptToClaude } from '../../services/api.service';
-import { settingsService } from '../../services/settings.service';
-
-interface Response {
-  content: string;
-  tokensIn: number;
-  tokensOut: number;
-  model: string;
-}
-
-// Model options for dropdown
-const CLAUDE_MODELS = [
-  { id: 'claude-opus-4-20251101', name: 'Opus 4.5 (Most capable)', description: 'Best for complex tasks' },
-  { id: 'claude-sonnet-4-20250514', name: 'Sonnet 4.5 (Balanced)', description: 'Default - balanced intelligence' },
-  { id: 'claude-haiku-4-20251001', name: 'Haiku 4.5 (Fast & economical)', description: 'Fast and cost-effective' },
-];
+import { ResponseViewer } from './ResponseViewer';
+import { unifiedAPIService, type LLMProvider } from '../../services/unified-api.service';
+import { WorkshopMode } from '../Workshop/WorkshopMode';
+import { ComparisonView } from './ComparisonView';
 
 export function PromptEditor() {
   const {
     systemPrompt,
-    userPrompt,
     setSystemPrompt,
+    userPrompt,
     setUserPrompt,
-    currentPrompt,
-    createNewPrompt,
   } = usePrompt();
 
-  const [lastSaved, setLastSaved] = useState<Date | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
+  const [response, setResponse] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [response, setResponse] = useState<Response | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string>('');
 
-  // Model selection state with localStorage persistence
-  const [selectedModel, setSelectedModel] = useState<string>(() => {
-    return localStorage.getItem('selectedModel') || CLAUDE_MODELS[1].id; // Default to Sonnet 4.5
+  // Provider selection
+  const [selectedProvider, setSelectedProvider] = useState<LLMProvider>(() => {
+    return (localStorage.getItem('selectedProvider') as LLMProvider) || 'anthropic';
   });
 
-  // Persist model selection
-  const handleModelChange = (modelId: string) => {
-    setSelectedModel(modelId);
-    localStorage.setItem('selectedModel', modelId);
+  // Model selection
+  const [selectedModel, setSelectedModel] = useState<string>(() => {
+    return localStorage.getItem('selectedModel') || 'claude-sonnet-4-5-20250929';
+  });
+
+  // Save selections
+  useEffect(() => {
+    localStorage.setItem('selectedProvider', selectedProvider);
+  }, [selectedProvider]);
+
+  useEffect(() => {
+    localStorage.setItem('selectedModel', selectedModel);
+  }, [selectedModel]);
+
+  // Get models for current provider
+  const modelsByProvider = unifiedAPIService.getModelsByProvider();
+  const currentModels = modelsByProvider[selectedProvider] || [];
+
+  // Set default model when provider changes
+  useEffect(() => {
+    if (currentModels.length > 0 && !currentModels.find(m => m.id === selectedModel)) {
+      setSelectedModel(currentModels[0].id);
+    }
+  }, [selectedProvider, currentModels, selectedModel]);
+
+  const handleProviderChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedProvider(e.target.value as LLMProvider);
   };
 
-  // Initialize a new prompt on mount if none exists
-  useEffect(() => {
-    if (!currentPrompt) {
-      createNewPrompt();
-    }
-  }, [currentPrompt, createNewPrompt]);
+  const handleModelChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedModel(e.target.value);
+  };
 
-  // Update last saved timestamp when content changes
-  useEffect(() => {
-    setIsSaving(true);
-    const timeout = setTimeout(() => {
-      setLastSaved(new Date());
-      setIsSaving(false);
-    }, 1000);
-
-    return () => clearTimeout(timeout);
-  }, [systemPrompt, userPrompt]);
-
-  // Calculate combined token estimate
-  const combinedCharCount = systemPrompt.length + userPrompt.length;
-  const combinedTokens = Math.ceil(combinedCharCount / 4);
-
-  // Estimate cost (using Claude Sonnet 4.5 pricing: $3 per 1M input tokens)
-  const estimatedCostInput = (combinedTokens / 1_000_000) * 3;
-
-  // Handle sending to Claude
-  const handleSend = async () => {
-    // Check if user prompt is empty
+  const handleSend = useCallback(async () => {
     if (!userPrompt.trim()) {
-      setError('Please enter a user prompt');
+      setError('Please enter a prompt');
       return;
     }
 
-    // Get API key from IndexedDB settings
+    setIsLoading(true);
+    setError('');
+    setResponse(null);
+
     try {
-      const settings = await settingsService.getSettings();
-      const apiKey = settings.apiKeys['anthropic'];
+      const apiKey = unifiedAPIService.getApiKey(selectedProvider);
       
       if (!apiKey) {
-        setError('Please add your Claude API key in Settings');
-        return;
+        throw new Error(`Please add your ${selectedProvider} API key in Settings`);
       }
 
-      setIsLoading(true);
-      setError(null);
-      setResponse(null);
+      const result = await unifiedAPIService.sendPrompt(
+        systemPrompt,
+        userPrompt,
+        selectedModel,
+        apiKey,
+        selectedProvider
+      );
 
-      const result = await sendPromptToClaude(systemPrompt, userPrompt, apiKey, selectedModel);
-      setResponse(result);
+      const displayData = {
+        text: result.text,
+        model: result.model,
+        timeSeconds: result.responseTimeMs / 1000,
+        cost: result.cost,
+        inputTokens: result.inputTokens,
+        outputTokens: result.outputTokens,
+      };
+
+      setResponse(displayData);
+
+      // Save to storage (background)
+      console.log('Response saved:', displayData);
+
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to send prompt');
+      setError(err instanceof Error ? err.message : 'Failed to send message');
+      console.error('Send error:', err);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [systemPrompt, userPrompt, selectedModel, selectedProvider]);
 
-  // Handle Cmd+Enter keyboard shortcut
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
+  // Keyboard shortcut: Cmd/Ctrl + Enter
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
         e.preventDefault();
-        handleSend();
+        if (!isLoading) {
+          handleSend();
+        }
       }
-    },
-    [systemPrompt, userPrompt, selectedModel]
-  );
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleSend, isLoading]);
+
+  const currentModelInfo = currentModels.find(m => m.id === selectedModel);
+
+  // Workshop mode state
+  const [isWorkshopMode, setIsWorkshopMode] = useState<boolean>(() => {
+    return localStorage.getItem('promptlab_workshopMode') === 'true';
+  });
+
+  // Comparison mode state
+  const [isComparisonMode, setIsComparisonMode] = useState<boolean>(() => {
+    return localStorage.getItem('promptlab_comparisonMode') === 'true';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('promptlab_workshopMode', isWorkshopMode.toString());
+  }, [isWorkshopMode]);
+
+  useEffect(() => {
+    localStorage.setItem('promptlab_comparisonMode', isComparisonMode.toString());
+  }, [isComparisonMode]);
+
+  // If in workshop mode, render workshop interface
+  if (isWorkshopMode) {
+    return (
+      <div className="w-full max-w-6xl mx-auto p-6">
+        <WorkshopMode
+          systemPrompt={systemPrompt}
+          userPrompt={userPrompt}
+          onSystemPromptChange={setSystemPrompt}
+          onUserPromptChange={setUserPrompt}
+          onExit={() => setIsWorkshopMode(false)}
+        />
+      </div>
+    );
+  }
+
+  // If in comparison mode, render comparison interface
+  if (isComparisonMode) {
+    return (
+      <div className="w-full max-w-6xl mx-auto p-6 min-h-full">
+        <ComparisonView
+          systemPrompt={systemPrompt}
+          userPrompt={userPrompt}
+          onSystemPromptChange={setSystemPrompt}
+          onUserPromptChange={setUserPrompt}
+          onExit={() => setIsComparisonMode(false)}
+        />
+      </div>
+    );
+  }
 
   return (
-    <div className="flex flex-col h-full gap-4">
-      {/* Header with Combined Stats */}
-      <div className="flex items-center justify-between p-4 bg-white border-b border-gray-200">
-        <div className="flex items-center gap-6">
-          <h2 className="text-lg font-semibold text-gray-900">Prompt Editor</h2>
-          <div className="flex items-center gap-4 text-sm">
-            <span className="text-gray-600">
-              Total: <span className="font-medium text-gray-900">~{combinedTokens.toLocaleString()} tokens</span>
-            </span>
-            <span className="text-gray-400">|</span>
-            <span className="text-gray-600">
-              Est. Cost: <span className="font-medium text-green-600">${estimatedCostInput.toFixed(4)}</span>
-            </span>
+    <div className="w-full max-w-4xl mx-auto p-6 space-y-6">
+      {/* Header with stats */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold text-zinc-50">Prompt Editor</h2>
+        <div className="flex items-center gap-4">
+          <TokenCounter characterCount={systemPrompt.length + userPrompt.length} label="Total" />
+          {/* Comparison Mode - The Big Feature */}
+          <div className="relative group">
+            <button
+              onClick={() => setIsComparisonMode(true)}
+              className="px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg transition-all text-sm font-medium shadow-lg shadow-blue-900/30 flex items-center gap-2"
+            >
+              <span>🔄</span>
+              <span>Compare</span>
+            </button>
+            {/* Rollover Tooltip */}
+            <div className="absolute right-0 top-full mt-2 w-64 p-3 bg-zinc-800 border border-zinc-600 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+              <p className="text-sm font-medium text-white mb-1">🔄 Comparison Mode</p>
+              <p className="text-xs text-zinc-400">
+                Compare 2-3 models side-by-side, see AI analysis, and let models discuss each other's responses.
+              </p>
+              <div className="mt-2 pt-2 border-t border-zinc-600">
+                <p className="text-xs text-blue-400">✨ The big ticket item!</p>
+              </div>
+            </div>
+          </div>
+          {/* Workshop Mode */}
+          <div className="relative group">
+            <button
+              onClick={() => setIsWorkshopMode(true)}
+              className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors text-sm font-medium flex items-center gap-2"
+            >
+              <span>🧪</span>
+              <span>Workshop</span>
+            </button>
+            {/* Rollover Tooltip */}
+            <div className="absolute right-0 top-full mt-2 w-56 p-3 bg-zinc-800 border border-zinc-600 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+              <p className="text-sm font-medium text-white mb-1">🧪 Workshop Mode</p>
+              <p className="text-xs text-zinc-400">
+                Test prompts across multiple models simultaneously. Great for batch experiments.
+              </p>
+            </div>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          {/* Model Selection Dropdown */}
+      </div>
+
+      {/* System Prompt (Optional) */}
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-zinc-200">
+          System Prompt (optional)
+        </label>
+        <textarea
+          value={systemPrompt}
+          onChange={(e) => setSystemPrompt(e.target.value)}
+          placeholder="Enter system-level instructions (role, behavior, constraints)..."
+          className="w-full h-24 px-3 py-2 bg-zinc-800 border border-zinc-600 rounded-lg text-zinc-50 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none font-mono text-sm"
+        />
+      </div>
+
+      {/* User Prompt */}
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-zinc-200">
+          User Prompt
+        </label>
+        <textarea
+          value={userPrompt}
+          onChange={(e) => setUserPrompt(e.target.value)}
+          placeholder="Enter your prompt... (Press ⌘+Enter to send)"
+          className="w-full h-48 px-3 py-2 bg-zinc-800 border border-zinc-600 rounded-lg text-zinc-50 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none font-mono text-sm"
+        />
+      </div>
+
+      {/* Provider + Model Selection */}
+      <div className="flex items-center gap-3">
+        <div className="w-40">
+          <select
+            value={selectedProvider}
+            onChange={handleProviderChange}
+            className="w-full px-3 py-2 bg-zinc-800 text-zinc-50 border border-zinc-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+          >
+            <option value="anthropic">🦙 Anthropic</option>
+            <option value="openai">🔵 OpenAI</option>
+            <option value="google">🔷 Google</option>
+            <option value="openrouter">🌐 OpenRouter</option>
+          </select>
+        </div>
+
+        <div className="flex-1">
           <select
             value={selectedModel}
-            onChange={(e) => handleModelChange(e.target.value)}
-            className="bg-zinc-800 text-zinc-50 border border-zinc-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            onChange={handleModelChange}
+            className="w-full px-3 py-2 bg-zinc-800 text-zinc-50 border border-zinc-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
           >
-            {CLAUDE_MODELS.map((model) => (
+            {currentModels.map((model) => (
               <option key={model.id} value={model.id}>
-                {model.name}
+                {model.name} ({model.contextWindow >= 1000000 ? `${model.contextWindow / 1000000}M` : `${model.contextWindow / 1000}K`})
               </option>
             ))}
           </select>
-          {isSaving && (
-            <span className="text-xs text-gray-500">Saving...</span>
+        </div>
+
+        <button
+          onClick={handleSend}
+          disabled={isLoading || !userPrompt.trim()}
+          className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium text-sm"
+        >
+          {isLoading ? 'Sending...' : 'Send (⌘↵)'}
+        </button>
+      </div>
+
+      {/* Selected Model Info */}
+      {currentModelInfo && (
+        <div className="flex items-center gap-4 text-xs text-zinc-400">
+          <span>
+            {selectedProvider === 'anthropic' && '🦙'}
+            {selectedProvider === 'openai' && '🔵'}
+            {selectedProvider === 'google' && '🔷'}
+            {selectedProvider === 'openrouter' && '🌐'}
+            {' '}{currentModelInfo.name}
+          </span>
+          <span>
+            {currentModelInfo.contextWindow >= 1000000 
+              ? `${(currentModelInfo.contextWindow / 1000000).toFixed(0)}M` 
+              : `${(currentModelInfo.contextWindow / 1000).toFixed(0)}K`} context
+          </span>
+          {currentModelInfo.supportsStreaming && (
+            <span className="text-green-400">● Streaming</span>
           )}
-          {!isSaving && lastSaved && (
-            <span className="text-xs text-gray-500">
-              Saved {lastSaved.toLocaleTimeString()}
-            </span>
-          )}
-          <button
-            onClick={handleSend}
-            disabled={isLoading}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isLoading ? 'Sending...' : 'Send (⌘↵)'}
-          </button>
         </div>
-      </div>
+      )}
 
-      {/* Editor Content */}
-      <div className="flex flex-col gap-4 p-4 flex-1 overflow-auto">
-        {/* System Prompt */}
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between">
-            <label className="text-sm font-medium text-gray-700">
-              System Prompt <span className="text-gray-400">(optional)</span>
-            </label>
-            <TokenCounter characterCount={systemPrompt.length} label="System" />
-          </div>
-          <textarea
-            value={systemPrompt}
-            onChange={(e) => setSystemPrompt(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Enter system-level instructions (e.g., role, behavior, constraints)..."
-            className="w-full h-32 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y font-mono"
-          />
+      {/* Error Display */}
+      {error && (
+        <div className="p-4 bg-red-950 border border-red-800 rounded-lg">
+          <p className="text-sm text-red-200">
+            <strong>Error:</strong> {error}
+          </p>
         </div>
+      )}
 
-        {/* User Prompt */}
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between">
-            <label className="text-sm font-medium text-gray-700">
-              User Prompt
-            </label>
-            <TokenCounter characterCount={userPrompt.length} label="User" />
-          </div>
-          <textarea
-            value={userPrompt}
-            onChange={(e) => setUserPrompt(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Enter your prompt here... (Press Cmd+Enter to send)"
-            className="w-full min-h-[200px] px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y font-mono"
-          />
-        </div>
-
-        {/* Response Section */}
-        {(isLoading || error || response) && (
-          <div className="flex flex-col gap-2">
-            <h3 className="text-sm font-medium text-gray-700">Response</h3>
-            
-            {/* Loading */}
-            {isLoading && (
-              <div className="p-6 bg-white border border-gray-200 rounded-lg">
-                <div className="flex items-center gap-2 text-gray-600">
-                  <div className="animate-spin h-4 w-4 border-2 border-blue-600 border-t-transparent rounded-full"></div>
-                  <span>Waiting for Claude...</span>
-                </div>
-              </div>
-            )}
-
-            {/* Error */}
-            {error && (
-              <div className="p-6 bg-red-50 border border-red-200 rounded-lg">
-                <h4 className="text-sm font-semibold text-red-900 mb-2">Error</h4>
-                <p className="text-sm text-red-700">{error}</p>
-              </div>
-            )}
-
-            {/* Response */}
-            {response && !isLoading && (
-              <div className="flex flex-col gap-4">
-                {/* Stats */}
-                <div className="flex items-center gap-4 text-xs text-gray-600 px-3">
-                  <span className="font-medium">{response.model}</span>
-                  <span>In: {response.tokensIn.toLocaleString()} tokens</span>
-                  <span>Out: {response.tokensOut.toLocaleString()} tokens</span>
-                  <span className="text-green-600 font-medium">
-                    Cost: ${((response.tokensIn / 1_000_000) * 3 + (response.tokensOut / 1_000_000) * 15).toFixed(4)}
-                  </span>
-                </div>
-
-                {/* Content */}
-                <div className="p-6 bg-white border border-gray-200 rounded-lg">
-                  <pre className="whitespace-pre-wrap font-sans text-sm text-gray-900">
-                    {response.content}
-                  </pre>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Footer Help Text */}
-      <div className="px-4 py-2 bg-gray-50 border-t border-gray-200">
-        <p className="text-xs text-gray-500">
-          💡 Tip: Press <kbd className="px-1.5 py-0.5 text-xs font-semibold text-gray-800 bg-gray-100 border border-gray-200 rounded">⌘ Enter</kbd> to send your prompt
-        </p>
-      </div>
+      {/* Response Display */}
+      {response && <ResponseViewer response={response} />}
     </div>
   );
 }

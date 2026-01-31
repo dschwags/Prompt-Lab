@@ -1,5 +1,7 @@
 # Clackyrules Additions for Prompt Lab Build
 
+**IMPORTANT:** Start by reading `01A-clackyrules-auto-loader.md` - this contains the CRITICAL CONTEXT PROTOCOL that must be applied BEFORE answering any request.
+
 Add these rules to your existing .clackyrules file before starting the build.
 
 ---

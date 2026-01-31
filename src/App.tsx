@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { SettingsPanel } from './components/Settings/SettingsPanel';
+import { SettingsModal } from './components/Settings/SettingsModal';
 import { PromptEditor } from './components/PromptEditor/PromptEditor';
 import { PromptProvider } from './context/PromptContext';
 
@@ -8,7 +8,7 @@ function App() {
 
   return (
     <PromptProvider>
-      <div className="flex flex-col h-screen bg-gray-50">
+      <div className="flex flex-col min-h-screen bg-gray-50">
         {/* Header */}
         <header className="bg-white border-b border-gray-200 px-6 py-4 flex-shrink-0">
           <div className="flex items-center justify-between">
@@ -22,13 +22,13 @@ function App() {
           </div>
         </header>
 
-        {/* Main Content */}
-        <main className="flex-1 overflow-hidden">
+        {/* Main Content - allow natural overflow */}
+        <main className="flex-1 overflow-y-auto p-6">
           <PromptEditor />
         </main>
 
         {/* Settings Modal */}
-        {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
+        {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
       </div>
     </PromptProvider>
   );
