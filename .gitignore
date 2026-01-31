@@ -40,3 +40,6 @@ coverage
 
 # Misc
 *.tsbuildinfo
+
+# Developer Documentation
+CLAUDE_ONBOARDING.md
