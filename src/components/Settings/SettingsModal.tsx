@@ -149,14 +149,15 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black bg-opacity-50 z-40"
-        style={{ 
+        className="fixed inset-0 bg-black z-40"
+        style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           position: 'fixed',
           top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.5)'
+          backgroundColor: 'rgba(0, 0, 0, 0.75)',
+          opacity: 1
         }}
         onClick={onClose}
       />

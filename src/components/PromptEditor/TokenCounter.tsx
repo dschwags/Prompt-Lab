@@ -8,11 +8,11 @@ export function TokenCounter({ characterCount, label }: TokenCounterProps) {
   const tokenEstimate = Math.ceil(characterCount / 4);
 
   return (
-    <div className="flex items-center gap-4 text-sm text-gray-600">
+    <div className="flex items-center gap-4 text-sm text-zinc-400">
       <span>
         {label}: {characterCount.toLocaleString()} chars
       </span>
-      <span className="text-gray-400">|</span>
+      <span className="text-zinc-600">|</span>
       <span>~{tokenEstimate.toLocaleString()} tokens</span>
     </div>
   );

@@ -8,7 +8,7 @@ import { usePrompt } from '../../hooks/usePrompt';
 import { TokenCounter } from './TokenCounter';
 import { ResponseViewer } from './ResponseViewer';
 import { unifiedAPIService, type LLMProvider } from '../../services/unified-api.service';
-import { WorkshopMode } from '../Workshop/WorkshopMode';
+import { WorkshopModeV2 } from '../Workshop/WorkshopModeV2';
 import { ComparisonView } from './ComparisonView';
 
 export function PromptEditor() {
@@ -143,18 +143,16 @@ export function PromptEditor() {
     localStorage.setItem('promptlab_comparisonMode', isComparisonMode.toString());
   }, [isComparisonMode]);
 
-  // If in workshop mode, render workshop interface
+  // If in workshop mode, render workshop interface V2
   if (isWorkshopMode) {
     return (
-      <div className="w-full max-w-6xl mx-auto p-6">
-        <WorkshopMode
-          systemPrompt={systemPrompt}
-          userPrompt={userPrompt}
-          onSystemPromptChange={setSystemPrompt}
-          onUserPromptChange={setUserPrompt}
-          onExit={() => setIsWorkshopMode(false)}
-        />
-      </div>
+      <WorkshopModeV2
+        systemPrompt={systemPrompt}
+        userPrompt={userPrompt}
+        onSystemPromptChange={setSystemPrompt}
+        onUserPromptChange={setUserPrompt}
+        onExit={() => setIsWorkshopMode(false)}
+      />
     );
   }
 
@@ -192,7 +190,7 @@ export function PromptEditor() {
             {/* Rollover Tooltip */}
             <div className="absolute right-0 top-full mt-2 w-64 p-3 bg-zinc-800 border border-zinc-600 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
               <p className="text-sm font-medium text-white mb-1">🔄 Comparison Mode</p>
-              <p className="text-xs text-zinc-400">
+              <p className="text-xs text-zinc-200">
                 Compare 2-3 models side-by-side, see AI analysis, and let models discuss each other's responses.
               </p>
               <div className="mt-2 pt-2 border-t border-zinc-600">
@@ -212,7 +210,7 @@ export function PromptEditor() {
             {/* Rollover Tooltip */}
             <div className="absolute right-0 top-full mt-2 w-56 p-3 bg-zinc-800 border border-zinc-600 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
               <p className="text-sm font-medium text-white mb-1">🧪 Workshop Mode</p>
-              <p className="text-xs text-zinc-400">
+              <p className="text-xs text-zinc-200">
                 Test prompts across multiple models simultaneously. Great for batch experiments.
               </p>
             </div>
