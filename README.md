@@ -1,80 +1,83 @@
-# Prompt Lab
+# Prompt Lab v2.0
 
-A client-side React application for developing, testing, and validating prompts before implementation in Clacky or other AI tools.
+AI prompt engineering workspace with multi-model comparison, color lineage, and project integration.
 
-## Environment Initialized ✅
+## Features
 
-The development environment has been successfully initialized with the following:
+- **Multi-Model Comparison**: Run prompts against multiple AI models simultaneously
+- **Color Lineage**: Visual tracking of model contributions across iterations
+- **Project Integration**: Browse and reference code from your projects
+- **Session History**: Save and resume prompt sessions
+- **Export**: Generate markdown reports of your work
 
-### Core Stack
-- **Framework**: React 18 with TypeScript
-- **Build Tool**: Vite
-- **Styling**: Tailwind CSS
-- **Database**: IndexedDB via `idb` library
-- **State Management**: React Context + Hooks
+## Getting Started
 
-### Project Structure
+### Prerequisites
+
+- Node.js 18+
+- npm or pnpm
+
+### Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/dschwags/Prompt-Lab.git
+cd Prompt-Lab
+
+# Install dependencies
+npm install
+
+# Copy environment template
+cp .env.example .env
+
+# Edit .env with your configuration
+```
+
+### Configuration
+
+Edit `.env` to configure:
+
+```env
+# Password for access (shared password for collaborators)
+PROMPT_LAB_PASSWORD=your-password
+
+# Projects to allow (folder names in /home/runner/workspace/)
+ALLOWED_PROJECTS=your-project-1,your-project-2
+```
+
+### Running
+
+```bash
+npm run dev
+```
+
+Open http://localhost:5173 in your browser.
+
+## Project Integration
+
+Prompt Lab can access your projects in `/home/runner/workspace/`:
+
+1. Add your project folders to `/home/runner/workspace/`
+2. Configure `ALLOWED_PROJECTS` in `.env`
+3. Use the "Workspace" panel to browse files
+4. Click "Insert" to add code to your prompts
+
+## Architecture
+
 ```
 prompt-lab/
-├── src/
-│   ├── services/
-│   │   └── db.service.ts      # IndexedDB with 6 stores
-│   ├── types/
-│   │   └── index.ts           # TypeScript interfaces
-│   ├── App.tsx                # Main application component
-│   ├── main.tsx               # React entry point
-│   └── index.css              # Tailwind CSS directives
-├── vite.config.ts             # Vite configuration with Clacky support
-├── tailwind.config.js         # Tailwind CSS configuration
-├── postcss.config.js          # PostCSS configuration
-└── package.json               # Dependencies and scripts
+├── server/              # Express backend (future)
+├── src/v2/              # React frontend
+│   ├── components/      # UI components
+│   ├── services/        # API clients
+│   └── App.tsx          # Main application
+└── package.json
 ```
-
-### IndexedDB Stores (6 total)
-1. **prompts** - Parent container for prompt versions
-2. **promptVersions** - Each edit creates a new version
-3. **responses** - Cached AI responses
-4. **rules** - Clacky validation rules
-5. **tagMeta** - Tag usage statistics
-6. **settings** - API keys and preferences
-
-### Development Commands
-```bash
-# Start development server
-npm run dev
-
-# Build for production
-npm run build
-
-# Preview production build
-npm run preview
-```
-
-### Clacky Environment
-- Configured in `/home/runner/.clackyai/.environments.yaml`
-- Runs on port 5173
-- Allowed hosts configured for `.clackypaas.com`
-
-### Next Steps
-Ready to proceed with Phase 1 implementation:
-- Step 2: Create type definitions ✅ (Already completed)
-- Step 3: Settings & API key management
-- Step 4: Prompt editor with system/user split
-- And beyond...
-
-## Project Guidelines
-
-### Architecture Constraints
-- ✅ Client-side only (no backend)
-- ✅ IndexedDB for all persistent data
-- ✅ API calls directly from browser
-- ✅ localStorage for API keys only
-
-### What NOT to Do
-- ❌ Don't create a backend/server
-- ❌ Don't use localStorage for prompts/responses
-- ❌ Don't add features not in the 13-step plan
-- ❌ Don't skip steps or combine them
 
 ## License
-ISC
+
+MIT
+
+## Contributing
+
+Contributions welcome! Please open an issue or PR.

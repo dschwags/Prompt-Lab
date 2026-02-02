@@ -1,6 +1,6 @@
 {
   "name": "prompt-lab",
-  "private": true,
+  "private": false,
   "version": "1.0.0",
   "type": "module",
   "scripts": {
@@ -8,10 +8,18 @@
     "build": "tsc && vite build",
     "preview": "vite preview"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
+  "keywords": ["prompt-engineering", "ai", "workshop", "clacky"],
+  "author": "Your Name",
+  "license": "MIT",
+  "description": "Prompt Lab v2.0 - AI prompt engineering workspace with multi-model comparison and color lineage",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dschwags/Prompt-Lab.git"
+  },
+  "bugs": {
+    "url": "https://github.com/dschwags/Prompt-Lab/issues"
+  },
+  "homepage": "https://github.com/dschwags/Prompt-Lab#readme",
   "devDependencies": {
     "@types/react": "^19.2.10",
     "@types/react-dom": "^19.2.3",
