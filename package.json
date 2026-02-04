@@ -4,14 +4,24 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:client": "vite",
+    "dev:server": "node server/index.js",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "setup": "bash setup.sh",
+    "start": "bash start.sh"
   },
-  "keywords": ["prompt-engineering", "ai", "workshop", "clacky"],
+  "keywords": [
+    "prompt-engineering",
+    "ai",
+    "workshop",
+    "clacky",
+    "workspace"
+  ],
   "author": "Your Name",
   "license": "MIT",
-  "description": "Prompt Lab v2.0 - AI prompt engineering workspace with multi-model comparison and color lineage",
+  "description": "Prompt Lab v2.0 - AI prompt engineering workspace with multi-model comparison, color lineage, and workspace file integration",
   "repository": {
     "type": "git",
     "url": "https://github.com/dschwags/Prompt-Lab.git"
@@ -20,21 +30,34 @@
     "url": "https://github.com/dschwags/Prompt-Lab/issues"
   },
   "homepage": "https://github.com/dschwags/Prompt-Lab#readme",
+  "dependencies": {
+    "cookie-parser": "^1.4.6",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^4.18.2",
+    "express-rate-limit": "^7.1.5",
+    "idb": "^8.0.0",
+    "lucide-react": "^0.344.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "uuid": "^9.0.1"
+  },
   "devDependencies": {
-    "@types/react": "^19.2.10",
-    "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^5.1.2",
+    "@tailwindcss/vite": "^4.1.18",
+    "@types/cookie-parser": "^1.4.6",
+    "@types/cors": "^2.8.17",
+    "@types/node": "^20.10.0",
+    "@types/react": "^18.3.27",
+    "@types/react-dom": "^18.3.7",
+    "@types/uuid": "^9.0.7",
+    "@vitejs/plugin-react": "^4.7.0",
     "autoprefixer": "^10.4.23",
+    "concurrently": "^8.2.2",
     "postcss": "^8.5.6",
+    "postcss-import": "^16.1.1",
+    "postcss-preset-env": "^11.1.2",
     "tailwindcss": "^4.1.18",
     "typescript": "^5.9.3",
-    "vite": "^7.3.1"
-  },
-  "dependencies": {
-    "@tailwindcss/postcss": "^4.1.18",
-    "idb": "^8.0.3",
-    "lucide-react": "^0.563.0",
-    "react": "^19.2.4",
-    "react-dom": "^19.2.4"
+    "vite": "^5.1.4"
   }
 }

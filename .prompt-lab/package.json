@@ -1,0 +1,28 @@
+{
+  "name": "@prompt-lab/embedded",
+  "version": "2.0.0",
+  "description": "Embedded LLM testing and comparison tool with local execution and shared intelligence",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "server": "node server/index.js",
+    "dev": "npm run server"
+  },
+  "dependencies": {
+    "cookie-parser": "^1.4.6",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.18.2",
+    "express-rate-limit": "^7.1.5"
+  },
+  "keywords": [
+    "llm",
+    "prompt",
+    "testing",
+    "ai",
+    "embedded",
+    "development-tool"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+}
