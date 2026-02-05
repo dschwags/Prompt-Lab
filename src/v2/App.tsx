@@ -915,6 +915,7 @@ export default function App() {
                 onStartWorkshop={handleStartWorkshop}
                 isLoading={isLoading}
                 loadingProgress={loadingProgress}
+                settings={settings}
               />
             ) : (
               <Timeline
@@ -943,6 +944,7 @@ export default function App() {
             <SynthesisPanel
               session={session}
               onClose={() => setShowSynthesis(false)}
+              settings={settings}
             />
           )}
 

@@ -1,17 +1,19 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Search, LayoutGrid, Table, Cpu, Info, Zap, Brain, Star, Sparkles } from 'lucide-react';
-import { ModelDefinition } from '../../types';
+import { Search, LayoutGrid, Table, Cpu, Info, Zap, Brain, Star, Sparkles, Trash2, RefreshCw } from 'lucide-react';
+import { ModelDefinition, Settings } from '../../types';
 import { getFlagByProvider, formatPrice } from '../../utils/format';
 import { apiService } from '../../services/api.service';
 import { getModelBadges, scoreModel, shouldExcludeModel } from '../../config/model-curation';
+import { fetchAvailableModels, getCuratedModels, clearModelsCache } from '../../services/api-models';
 
 interface EngineCatalogProps {
   selectedModels: string[];
   onSelectionChange: (modelIds: string[]) => void;
   maxSelection?: number;
+  settings?: Settings;
 }
 
-export function EngineCatalog({ selectedModels, onSelectionChange, maxSelection = 5 }: EngineCatalogProps) {
+export function EngineCatalog({ selectedModels, onSelectionChange, maxSelection = 5, settings }: EngineCatalogProps) {
   const [models, setModels] = useState<ModelDefinition[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -20,12 +22,51 @@ export function EngineCatalog({ selectedModels, onSelectionChange, maxSelection 
   const [categoryFilter, setCategoryFilter] = useState<'recommended' | 'all'>('recommended');
   const [hoveredModel, setHoveredModel] = useState<string | null>(null);
   const [tooltipPosition, setTooltipPosition] = useState<{ x: number; y: number } | null>(null);
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [loadingModels, setLoadingModels] = useState<Record<string, boolean>>({});
+  const [showUnavailable, setShowUnavailable] = useState(false);
   
   // Sort state
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' }>({ 
     key: 'score', 
     direction: 'desc' 
   });
+
+  // Fetch available models based on API keys
+  useEffect(() => {
+    // Clear cache when settings change to pick up new keys
+    clearModelsCache();
+    
+    const fetchModelsForProviders = async () => {
+      const newAvailableModels: string[] = [];
+      
+      // Only OpenRouter works from browser (CORS blocks direct OpenAI/Google/Anthropic calls)
+      const apiKey = settings?.keys?.openrouter;
+      if (apiKey && apiKey.trim()) {
+        setLoadingModels(prev => ({ ...prev, openrouter: true }));
+        
+        try {
+          const fetchedModels = await fetchAvailableModels('openrouter', apiKey);
+          newAvailableModels.push(...fetchedModels.map(m => m.id));
+        } catch (e) {
+          // If fetch fails, use curated list
+          const curated = getCuratedModels();
+          newAvailableModels.push(...curated.map(m => m.id));
+        }
+        
+        setLoadingModels(prev => ({ ...prev, openrouter: false }));
+      }
+      
+      setAvailableModels(newAvailableModels);
+    };
+    
+    if (settings?.keys) {
+      fetchModelsForProviders();
+    } else {
+      // No keys configured - clear available models
+      setAvailableModels([]);
+    }
+  }, [settings?.keys]);
 
   // Fetch models on mount
   useEffect(() => {
@@ -74,6 +115,12 @@ export function EngineCatalog({ selectedModels, onSelectionChange, maxSelection 
     return <span className="ml-1">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>;
   };
 
+  // Check if model is available based on API keys
+  const isModelAvailable = (modelId: string): boolean => {
+    if (availableModels.length === 0) return true; // Show all if no keys configured
+    return availableModels.includes(modelId);
+  };
+
   // Filtered and sorted models with curation
   const filteredModels = useMemo(() => {
     let filtered = models;
@@ -82,6 +129,11 @@ export function EngineCatalog({ selectedModels, onSelectionChange, maxSelection 
     if (categoryFilter === 'recommended') {
       // Filter out excluded models first
       filtered = filtered.filter(m => !shouldExcludeModel(m));
+    }
+
+    // Filter by availability if showUnavailable is false
+    if (!showUnavailable) {
+      filtered = filtered.filter(m => isModelAvailable(m.id));
     }
 
     // Search filter
@@ -152,7 +204,7 @@ export function EngineCatalog({ selectedModels, onSelectionChange, maxSelection 
     });
 
     return filtered;
-  }, [models, searchQuery, regionFilter, categoryFilter, sortConfig]);
+  }, [models, searchQuery, regionFilter, categoryFilter, sortConfig, availableModels, showUnavailable]);
 
   // Toggle model selection
   const toggleModel = (modelId: string) => {
@@ -242,12 +294,28 @@ export function EngineCatalog({ selectedModels, onSelectionChange, maxSelection 
             <h3 className="font-black text-slate-900 uppercase tracking-tight">Engine Catalog</h3>
             <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
               {selectedModels.length} of {maxSelection} selected • {filteredModels.length} models
+              {availableModels.length > 0 && ` • ${filteredModels.filter(m => !isModelAvailable(m.id)).length} hidden`}
             </p>
           </div>
         </div>
 
         {/* Controls */}
         <div className="flex flex-wrap items-center gap-3">
+          {/* Show unavailable toggle */}
+          {availableModels.length > 0 && (
+            <button
+              onClick={() => setShowUnavailable(!showUnavailable)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${
+                showUnavailable 
+                  ? 'bg-amber-100 text-amber-700' 
+                  : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+              }`}
+            >
+              {showUnavailable ? '👁' : '🚫'}
+              {showUnavailable ? 'Showing all' : 'Show hidden'}
+            </button>
+          )}
+
           {/* Category Filter */}
           <div className="flex bg-slate-100 p-1 rounded-2xl">
             <button
@@ -360,6 +428,11 @@ export function EngineCatalog({ selectedModels, onSelectionChange, maxSelection 
                     <div className="flex-1 min-w-0 pr-2">
                       <h4 className="font-black text-xs uppercase tracking-tight text-slate-700 truncate">
                         {model.name}
+                        {!isModelAvailable(model.id) && (
+                          <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-600">
+                            🚫 Unavailable
+                          </span>
+                        )}
                       </h4>
                       <p className="text-xs text-slate-400 font-mono truncate mt-0.5">
                         {model.provider}
@@ -498,7 +571,14 @@ export function EngineCatalog({ selectedModels, onSelectionChange, maxSelection 
                     }}
                   >
                     <td className="py-3 px-4">
-                      <p className="font-black text-xs text-slate-700">{model.name}</p>
+                      <p className="font-black text-xs text-slate-700">
+                        {model.name}
+                        {!isModelAvailable(model.id) && (
+                          <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-600">
+                            🚫
+                          </span>
+                        )}
+                      </p>
                       <p className="text-xs text-slate-400 font-mono">{model.id}</p>
                       {/* Badges row in table */}
                       {badges.length > 0 && (

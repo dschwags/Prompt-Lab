@@ -14,9 +14,11 @@ import {
   XCircle,
   Loader2,
   RefreshCw,
-  Key
+  Key,
+  Trash2
 } from 'lucide-react';
 import { Settings } from '../../types';
+import { clearModelsCache } from '../../services/api-models';
 
 interface WelcomeScreenProps {
   onEnter: () => void;
@@ -86,33 +88,67 @@ function ApiKeysSection({ settings, onSave }: { settings: Settings; onSave: (set
   const [verifying, setVerifying] = useState<Record<string, boolean>>({});
   const [verified, setVerified] = useState<Record<string, boolean | null>>({});
   const [testError, setTestError] = useState<Record<string, string>>({});
+  const [balances, setBalances] = useState<Record<string, string>>({});
 
   const toggleKeyVisibility = (provider: string) => {
     setShowKeys(prev => ({ ...prev, [provider]: !prev[provider] }));
   };
 
-  const handleSave = () => onSave(localSettings);
+  const handleSave = () => {
+    clearModelsCache();
+    onSave(localSettings);
+  };
+
+  const clearApiKey = (providerId: string) => {
+    setLocalSettings({ ...localSettings, keys: { ...localSettings.keys, [providerId]: '' }});
+    setVerified(prev => ({ ...prev, [providerId]: null }));
+    setTestError(prev => ({ ...prev, [providerId]: '' }));
+    setBalances(prev => ({ ...prev, [providerId]: '' }));
+    clearModelsCache();
+  };
 
   const verifyKey = async (providerId: string, key: string) => {
     if (!key.trim()) return;
     setVerifying(prev => ({ ...prev, [providerId]: true }));
     setTestError(prev => ({ ...prev, [providerId]: '' }));
     setVerified(prev => ({ ...prev, [providerId]: null }));
+    setBalances(prev => ({ ...prev, [providerId]: '' }));
 
     try {
-      const response = await fetch(`https://openrouter.ai/api/v1/models`, {
-        headers: { 'Authorization': `Bearer ${key}`, 'HTTP-Referer': window.location.origin }
-      });
-      if (response.ok) {
-        setVerified(prev => ({ ...prev, [providerId]: true }));
-      } else if (response.status === 401) {
-        setVerified(prev => ({ ...prev, [providerId]: false }));
-        setTestError(prev => ({ ...prev, [providerId]: 'Invalid API key' }));
-      } else if (providerId === 'openrouter') {
-        setVerified(prev => ({ ...prev, [providerId]: false }));
-        setTestError(prev => ({ ...prev, [providerId]: 'Could not verify key' }));
+      // For OpenRouter, fetch balance info from /v1/keys
+      if (providerId === 'openrouter') {
+        const response = await fetch(`https://openrouter.ai/api/v1/keys`, {
+          headers: { 'Authorization': `Bearer ${key}`, 'HTTP-Referer': window.location.origin }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          // Get the first key's info to display balance
+          const firstKey = data.data?.[0];
+          if (firstKey?.limit_remaining !== undefined) {
+            setBalances(prev => ({ ...prev, [providerId]: `$${firstKey.limit_remaining.toFixed(2)} remaining` }));
+          }
+          setVerified(prev => ({ ...prev, [providerId]: true }));
+        } else if (response.status === 401) {
+          setVerified(prev => ({ ...prev, [providerId]: false }));
+          setTestError(prev => ({ ...prev, [providerId]: 'Invalid API key' }));
+        } else {
+          setVerified(prev => ({ ...prev, [providerId]: false }));
+          setTestError(prev => ({ ...prev, [providerId]: 'Could not verify key' }));
+        }
       } else {
-        setVerified(prev => ({ ...prev, [providerId]: null }));
+        // For other providers, just verify the key works
+        const response = await fetch(`https://openrouter.ai/api/v1/models`, {
+          headers: { 'Authorization': `Bearer ${key}`, 'HTTP-Referer': window.location.origin }
+        });
+        if (response.ok) {
+          setVerified(prev => ({ ...prev, [providerId]: true }));
+        } else if (response.status === 401) {
+          setVerified(prev => ({ ...prev, [providerId]: false }));
+          setTestError(prev => ({ ...prev, [providerId]: 'Invalid API key' }));
+        } else {
+          setVerified(prev => ({ ...prev, [providerId]: null }));
+        }
       }
     } catch {
       setVerified(prev => ({ ...prev, [providerId]: false }));
@@ -161,10 +197,15 @@ function ApiKeysSection({ settings, onSave }: { settings: Settings; onSave: (set
                 <div className="flex items-center gap-2">
                   <label className="text-xs font-black text-slate-500 uppercase tracking-wider">{label}</label>
                   {keyValue && (
-                    <span className="flex items-center gap-1">
+                    <span className="flex items-center gap-1.5">
                       {isVerifying ? <Loader2 size={10} className="text-indigo-500 animate-spin" /> : 
                        isVerified === true ? <CheckCircle size={10} className="text-emerald-500" /> : 
                        isVerified === false ? <XCircle size={10} className="text-red-500" /> : null}
+                      {isVerified === true && balances[id] && (
+                        <span className="text-[10px] font-medium text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full">
+                          {balances[id]}
+                        </span>
+                      )}
                     </span>
                   )}
                 </div>
@@ -185,9 +226,10 @@ function ApiKeysSection({ settings, onSave }: { settings: Settings; onSave: (set
                     setLocalSettings({ ...localSettings, keys: { ...localSettings.keys, [id]: e.target.value }});
                     setVerified(prev => ({ ...prev, [id]: null }));
                     setTestError(prev => ({ ...prev, [id]: '' }));
+                    setBalances(prev => ({ ...prev, [id]: '' }));
                   }}
                   placeholder={`Enter ${label} API key...`}
-                  className={`w-full p-3 pr-20 bg-slate-50 rounded-xl border-2 text-sm font-mono focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-200 outline-none transition-all ${isVerified === false ? 'border-red-300 focus:border-red-400' : ''}`}
+                  className={`w-full p-3 pr-28 bg-slate-50 rounded-xl border-2 text-sm font-mono focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-200 outline-none transition-all ${isVerified === false ? 'border-red-300 focus:border-red-400' : ''}`}
                 />
                 <button
                   onClick={() => verifyKey(id, keyValue)}

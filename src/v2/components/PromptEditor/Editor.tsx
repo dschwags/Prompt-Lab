@@ -8,7 +8,7 @@ import { CostEstimate } from './CostEstimate';
 import { SmartSuggestions, ContextTip } from './SmartSuggestions';
 import { PERSONA_PRESETS } from '../../data/personas';
 import { calculateCost, estimateTokens } from '../../data/modelPricing';
-import { ClackyProjectContext } from '../../types';
+import { ClackyProjectContext, Settings } from '../../types';
 import { INDUSTRY_TEMPLATES } from '../../data/industryTemplates';
 
 interface EditorProps {
@@ -21,6 +21,7 @@ interface EditorProps {
   onStartWorkshop: () => void;
   isLoading?: boolean;
   loadingProgress?: Record<string, 'pending' | 'loading' | 'complete' | 'error'>;
+  settings?: Settings;
 }
 
 export function Editor({
@@ -32,7 +33,8 @@ export function Editor({
   onContextImport,
   onStartWorkshop,
   isLoading,
-  loadingProgress = {}
+  loadingProgress = {},
+  settings
 }: EditorProps) {
   const [showImportModal, setShowImportModal] = useState(false);
   const [activeField, setActiveField] = useState<'system' | 'user' | null>(null);
@@ -361,6 +363,7 @@ export function Editor({
         selectedModels={selectedModels}
         onSelectionChange={onModelSelectionChange}
         maxSelection={5}
+        settings={settings}
       />
 
       {/* Import Context Modal */}

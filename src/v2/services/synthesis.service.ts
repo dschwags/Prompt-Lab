@@ -3,50 +3,53 @@ import { aarTemplates } from '../config/aar-templates';
 
 interface ModelInfo {
   id: string;
-  provider: 'google' | 'anthropic' | 'openai' | 'openrouter';
+  // All models route through OpenRouter for browser compatibility
+  provider: 'openrouter';
   endpoint: string;
 }
 
 const MODEL_CONFIG: Record<string, ModelInfo> = {
-  // Direct API providers
+  // All models route through OpenRouter (browser-compatible)
+  // Using OpenRouter's model ID format
   'google/gemini-2.0-flash-exp': {
-    id: 'gemini-2.0-flash-exp',
-    provider: 'google',
-    endpoint: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent'
+    id: 'google/gemini-2.0-flash-exp',
+    provider: 'openrouter',
+    endpoint: 'https://openrouter.ai/api/v1/chat/completions'
   },
   'google/gemini-pro-1.5': {
     id: 'gemini-1.5-pro',
-    provider: 'google',
-    endpoint: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent'
+    provider: 'openrouter',
+    endpoint: 'https://openrouter.ai/api/v1/chat/completions'
   },
+  // Anthropic models - use OpenRouter's ID format
   'anthropic/claude-sonnet-4': {
-    id: 'claude-sonnet-4-20250514',
-    provider: 'anthropic',
-    endpoint: 'https://api.anthropic.com/v1/messages'
+    id: 'anthropic/claude-sonnet-4-20250514',
+    provider: 'openrouter',
+    endpoint: 'https://openrouter.ai/api/v1/chat/completions'
   },
   'anthropic/claude-opus-4': {
-    id: 'claude-opus-4-20250514',
-    provider: 'anthropic',
-    endpoint: 'https://api.anthropic.com/v1/messages'
+    id: 'anthropic/claude-opus-4-20250514',
+    provider: 'openrouter',
+    endpoint: 'https://openrouter.ai/api/v1/chat/completions'
   },
+  // OpenAI models - use OpenRouter's ID format
   'openai/gpt-4o': {
     id: 'gpt-4o',
-    provider: 'openai',
-    endpoint: 'https://api.openai.com/v1/chat/completions'
+    provider: 'openrouter',
+    endpoint: 'https://openrouter.ai/api/v1/chat/completions'
   },
   'openai/gpt-4-turbo': {
     id: 'gpt-4-turbo',
-    provider: 'openai',
-    endpoint: 'https://api.openai.com/v1/chat/completions'
+    provider: 'openrouter',
+    endpoint: 'https://openrouter.ai/api/v1/chat/completions'
   },
-  // Models that route through OpenRouter (use openrouter API key)
   'meta-llama/llama-3.1-405b-instruct': {
-    id: 'meta-llama/llama-3.1-405b-instruct',
+    id: 'llama-3.1-405b-instruct',
     provider: 'openrouter',
     endpoint: 'https://openrouter.ai/api/v1/chat/completions'
   },
   'mistralai/mistral-large-2411': {
-    id: 'mistralai/mistral-large-2411',
+    id: 'mistral-large-2411',
     provider: 'openrouter',
     endpoint: 'https://openrouter.ai/api/v1/chat/completions'
   },
@@ -69,170 +72,54 @@ class SynthesisService {
     if (!settings) throw new Error('No API keys configured. Please add your API keys in the API Keys menu.');
     
     const parsed = JSON.parse(settings);
-    const apiKey = parsed.keys[modelConfig.provider];
-    if (!apiKey) throw new Error(`${modelConfig.provider.charAt(0).toUpperCase() + modelConfig.provider.slice(1)} API key required for synthesis. Please add your ${modelConfig.provider} API key in the API Keys menu.`);
+    // All models now use OpenRouter for browser compatibility
+    const apiKey = parsed.keys.openrouter;
+    if (!apiKey) throw new Error('OpenRouter API key required for synthesis. Please add your OpenRouter API key in the API Keys menu.');
 
     const history = this.buildHistory(session);
     const fullPrompt = `${template.systemPrompt}\n\nSession History:\n${history}`;
 
-    let result: SynthesisResult;
-
-    switch (modelConfig.provider) {
-      case 'google':
-        result = await this.callGoogle(modelConfig, apiKey, fullPrompt);
-        break;
-      case 'anthropic':
-        result = await this.callAnthropic(modelConfig, apiKey, fullPrompt);
-        break;
-      case 'openai':
-        result = await this.callOpenAI(modelConfig, apiKey, fullPrompt);
-        break;
-      case 'openrouter':
-        result = await this.callOpenRouter(modelConfig, apiKey, fullPrompt);
-        break;
-      default:
-        throw new Error(`Provider ${modelConfig.provider} not yet supported for synthesis`);
-    }
-
-    return result;
-  }
-
-  private async callGoogle(modelConfig: ModelInfo, apiKey: string, prompt: string): Promise<SynthesisResult> {
-    const response = await fetch(`${modelConfig.endpoint}?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: 'OBJECT',
-            properties: {
-              insights: {
-                type: 'ARRAY',
-                items: {
-                  type: 'OBJECT',
-                  properties: {
-                    title: { type: 'STRING' },
-                    desc: { type: 'STRING' }
-                  },
-                  required: ['title', 'desc']
-                }
-              },
-              finalPrompt: { type: 'STRING' }
-            },
-            required: ['insights', 'finalPrompt']
-          }
-        }
-      })
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Google API error: ${response.statusText} - ${error}`);
-    }
-
-    const data = await response.json();
-    return JSON.parse(data.candidates[0].content.parts[0].text);
-  }
-
-  private async callAnthropic(modelConfig: ModelInfo, apiKey: string, prompt: string): Promise<SynthesisResult> {
-    const response = await fetch(modelConfig.endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: modelConfig.id,
-        max_tokens: 4096,
-        messages: [
-          {
-            role: 'user',
-            content: `${prompt}\n\nRespond with a JSON object containing 'insights' (array of {title, desc}) and 'finalPrompt' (string).`
-          }
-        ]
-      })
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Anthropic API error: ${response.statusText} - ${error}`);
-    }
-
-    const data = await response.json();
-    const content = data.content[0].text;
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('Could not parse Anthropic response');
-    return JSON.parse(jsonMatch[0]);
-  }
-
-  private async callOpenAI(modelConfig: ModelInfo, apiKey: string, prompt: string): Promise<SynthesisResult> {
-    const response = await fetch(modelConfig.endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: modelConfig.id,
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a prompt synthesis assistant. Output ONLY valid JSON with this structure: { "insights": [{ "title": "string", "desc": "string" }], "finalPrompt": "string" }'
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        response_format: { type: 'json_object' }
-      })
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`OpenAI API error: ${response.statusText} - ${error}`);
-    }
-
-    const data = await response.json();
-    return JSON.parse(data.choices[0].message.content);
+    return this.callOpenRouter(modelConfig, apiKey, fullPrompt);
   }
 
   private async callOpenRouter(modelConfig: ModelInfo, apiKey: string, prompt: string): Promise<SynthesisResult> {
-    const response = await fetch(modelConfig.endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-        'HTTP-Referer': 'https://promptlab.ai',
-        'X-Title': 'Prompt Lab v2'
-      },
-      body: JSON.stringify({
-        model: modelConfig.id,
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a prompt synthesis assistant. Output ONLY valid JSON with this structure: { "insights": [{ "title": "string", "desc": "string" }], "finalPrompt": "string" }'
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        response_format: { type: 'json_object' }
-      })
-    });
+    try {
+      const response = await fetch(modelConfig.endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+          'HTTP-Referer': 'https://promptlab.ai',
+          'X-Title': 'Prompt Lab v2'
+        },
+        body: JSON.stringify({
+          model: modelConfig.id,
+          messages: [
+            {
+              role: 'system',
+              content: 'You are a prompt synthesis assistant. Output ONLY valid JSON with this structure: { "insights": [{ "title": "string", "desc": "string" }], "finalPrompt": "string" }'
+            },
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          response_format: { type: 'json_object' }
+        })
+      });
 
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`OpenRouter API error: ${response.statusText} - ${error}`);
+      if (!response.ok) {
+        const error = await response.text();
+        console.error('OpenRouter API error:', response.status, response.statusText, error);
+        throw new Error(`OpenRouter API error (${response.status}): ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return JSON.parse(data.choices[0].message.content);
+    } catch (err: any) {
+      console.error('OpenRouter fetch error:', err);
+      throw new Error(`API call failed: ${err.message || 'Unknown error'}`);
     }
-
-    const data = await response.json();
-    return JSON.parse(data.choices[0].message.content);
   }
 
   private buildHistory(session: WorkshopSession): string {

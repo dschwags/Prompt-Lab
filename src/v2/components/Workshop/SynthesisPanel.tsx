@@ -1,22 +1,78 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Target, X, Copy, CheckCircle, Sparkles, Loader, Cpu, Star } from 'lucide-react';
-import { WorkshopSession, SynthesisResult } from '../../types';
+import { WorkshopSession, SynthesisResult, Settings } from '../../types';
 import { aarTemplates } from '../../config/aar-templates';
 import { synthesisService } from '../../services/synthesis.service';
 import { ModelCuration } from '../../config/model-curation';
+import { fetchAvailableModels, getCuratedModels, clearModelsCache } from '../../services/api-models';
 
 interface SynthesisPanelProps {
   session: WorkshopSession;
   onClose: () => void;
+  settings?: Settings;
 }
 
-export function SynthesisPanel({ session, onClose }: SynthesisPanelProps) {
+export function SynthesisPanel({ session, onClose, settings }: SynthesisPanelProps) {
   const [selectedTemplate, setSelectedTemplate] = useState(aarTemplates[0].id);
   const [selectedModel, setSelectedModel] = useState(ModelCuration.synthesisModels[0]);
   const [result, setResult] = useState<SynthesisResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copiedPrompt, setCopiedPrompt] = useState(false);
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+
+  // Fetch available models based on API keys
+  useEffect(() => {
+    // Clear cache when settings change to pick up new keys
+    clearModelsCache();
+    
+    const fetchModels = async () => {
+      const available: string[] = [];
+      
+      // Only OpenRouter works from browser (CORS blocks direct OpenAI/Google/Anthropic calls)
+      const apiKey = settings?.keys?.openrouter;
+      if (apiKey && apiKey.trim()) {
+        try {
+          const fetched = await fetchAvailableModels('openrouter', apiKey);
+          available.push(...fetched.map(m => m.id));
+        } catch {
+          // Fallback to curated
+          const curated = getCuratedModels();
+          available.push(...curated.map(m => m.id));
+        }
+      }
+      
+      setAvailableModels(available);
+    };
+    
+    if (settings?.keys) {
+      fetchModels();
+    } else {
+      // No keys configured - clear available models
+      setAvailableModels([]);
+    }
+  }, [settings?.keys]);
+
+  // Filter synthesis models based on available API keys
+  const filteredSynthesisModels = useMemo(() => {
+    if (availableModels.length === 0) return ModelCuration.synthesisModels;
+    
+    return ModelCuration.synthesisModels.filter(model => {
+      // Check if the model or its provider is available
+      const provider = model.id.split('/')[0];
+      return availableModels.some(am => 
+        am === model.id || 
+        am.startsWith(provider + '/')
+      );
+    });
+  }, [availableModels]);
+
+  // Auto-select first available model when available models change
+  useEffect(() => {
+    if (filteredSynthesisModels.length > 0 && !filteredSynthesisModels.find(m => m.id === selectedModel?.id)) {
+      setSelectedModel(filteredSynthesisModels[0]);
+    }
+  }, [filteredSynthesisModels, selectedModel?.id]);
 
   const handleSynthesize = async () => {
     setLoading(true);
@@ -80,7 +136,7 @@ export function SynthesisPanel({ session, onClose }: SynthesisPanelProps) {
                   </h4>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {ModelCuration.synthesisModels.map((model) => (
+                  {filteredSynthesisModels.map((model) => (
                     <button
                       key={model.id}
                       onClick={() => setSelectedModel(model)}
