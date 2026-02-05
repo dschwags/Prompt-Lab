@@ -11,6 +11,11 @@ const sessions = new Map();
 const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomUUID();
 const SESSION_DAYS = parseInt(process.env.SESSION_DAYS || '7', 10);
 
+// Check if auth is disabled (at runtime)
+function isAuthDisabled() {
+  return process.env.DISABLE_AUTH === 'true' || process.env.DISABLE_AUTH === '1';
+}
+
 // Get password dynamically (after dotenv loads)
 function getPassword() {
   return process.env.PROMPT_LAB_PASSWORD || 'promptlab2024';
@@ -43,6 +48,8 @@ function createSession() {
 
 // Validate password dynamically
 function validatePassword(inputPassword) {
+  // If auth is disabled, always return true
+  if (isAuthDisabled()) return true;
   return inputPassword === getPassword();
 }
 
@@ -83,8 +90,16 @@ export function setupAuthRoutes(app) {
     res.json({ success: true });
   });
   
-  // Verify session
+  // Verify session / Auth status
   app.get('/api/auth/status', (req, res) => {
+    // If auth is disabled, return authenticated immediately
+    if (isAuthDisabled()) {
+      return res.json({ 
+        authenticated: true, 
+        disabled: true 
+      });
+    }
+    
     const sessionId = req.cookies?.sessionId;
     
     if (sessionId && isValidSession(sessionId)) {
@@ -97,6 +112,11 @@ export function setupAuthRoutes(app) {
 
 // Auth middleware for protected routes
 export function authMiddleware(req, res, next) {
+  // If auth is disabled, skip all checks
+  if (isAuthDisabled()) {
+    return next();
+  }
+  
   // Allow auth endpoints
   if (req.path.startsWith('/auth/login') || req.path.startsWith('/auth/logout') || req.path.startsWith('/auth/status')) {
     return next();
@@ -117,6 +137,9 @@ export function authMiddleware(req, res, next) {
 
 // Export for checking auth status
 export function isAuthenticated(req) {
+  // If auth is disabled, always return true
+  if (isAuthDisabled()) return true;
+  
   const sessionId = req.cookies?.sessionId;
   return sessionId ? isValidSession(sessionId) : false;
 }

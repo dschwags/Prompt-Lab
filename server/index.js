@@ -1,6 +1,13 @@
 // Load environment FIRST before any other imports
 import { config } from 'dotenv';
-config();
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Explicitly load .env from the app directory
+config({ path: join(__dirname, '../.env') });
 
 // Now load the rest
 const { default: express } = await import('express');
@@ -8,13 +15,9 @@ const { default: cors } = await import('cors');
 const { default: cookieParser } = await import('cookie-parser');
 const { default: rateLimit } = await import('express-rate-limit');
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { setupAuthRoutes, authMiddleware } from './auth.js';
 import { setupProjectRoutes } from './project-files.js';
 import { setupThreadRoutes } from './thread-service.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const PORT = process.env.PORT || 3001;
 const WORKSPACE_DIR = process.env.WORKSPACE_DIR || '/home/runner/workspace';
@@ -30,13 +33,14 @@ app.use(cors({
 app.use(express.json());
 app.use(cookieParser());
 
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 100,
-  message: { error: 'Too many requests, please slow down' }
-});
-app.use('/api/', limiter);
+// Rate limiting (temporarily disabled for development)
+// const limiter = rateLimit({
+//   windowMs: 60 * 1000,
+//   max: 100,
+//   message: { error: 'Too many requests, please slow down' },
+//   trustProxy: 1
+// });
+// app.use('/api/', limiter);
 
 // Health check
 app.get('/api/health', (req, res) => {

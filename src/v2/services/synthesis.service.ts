@@ -3,11 +3,12 @@ import { aarTemplates } from '../config/aar-templates';
 
 interface ModelInfo {
   id: string;
-  provider: 'google' | 'anthropic' | 'openai' | 'meta' | 'mistral' | 'deepseek';
+  provider: 'google' | 'anthropic' | 'openai' | 'openrouter';
   endpoint: string;
 }
 
 const MODEL_CONFIG: Record<string, ModelInfo> = {
+  // Direct API providers
   'google/gemini-2.0-flash-exp': {
     id: 'gemini-2.0-flash-exp',
     provider: 'google',
@@ -38,20 +39,21 @@ const MODEL_CONFIG: Record<string, ModelInfo> = {
     provider: 'openai',
     endpoint: 'https://api.openai.com/v1/chat/completions'
   },
+  // Models that route through OpenRouter (use openrouter API key)
   'meta-llama/llama-3.1-405b-instruct': {
-    id: 'llama-3.1-405b-instruct',
-    provider: 'meta',
-    endpoint: 'https://api.deepinfra.com/v1/inference/meta-llama/Llama-3.1-405B-Instruct'
+    id: 'meta-llama/llama-3.1-405b-instruct',
+    provider: 'openrouter',
+    endpoint: 'https://openrouter.ai/api/v1/chat/completions'
   },
   'mistralai/mistral-large-2411': {
-    id: 'mistral-large-2411',
-    provider: 'mistral',
-    endpoint: 'https://api.mistral.ai/v1/chat/completions'
+    id: 'mistralai/mistral-large-2411',
+    provider: 'openrouter',
+    endpoint: 'https://openrouter.ai/api/v1/chat/completions'
   },
   'deepseek/deepseek-chat': {
-    id: 'deepseek-chat',
-    provider: 'deepseek',
-    endpoint: 'https://api.deepseek.com/v1/chat/completions'
+    id: 'deepseek/deepseek-chat',
+    provider: 'openrouter',
+    endpoint: 'https://openrouter.ai/api/v1/chat/completions'
   }
 };
 
@@ -85,14 +87,8 @@ class SynthesisService {
       case 'openai':
         result = await this.callOpenAI(modelConfig, apiKey, fullPrompt);
         break;
-      case 'mistral':
-        result = await this.callMistral(modelConfig, apiKey, fullPrompt);
-        break;
-      case 'deepseek':
-        result = await this.callDeepSeek(modelConfig, apiKey, fullPrompt);
-        break;
-      case 'meta':
-        result = await this.callMeta(modelConfig, apiKey, fullPrompt);
+      case 'openrouter':
+        result = await this.callOpenRouter(modelConfig, apiKey, fullPrompt);
         break;
       default:
         throw new Error(`Provider ${modelConfig.provider} not yet supported for synthesis`);
@@ -205,12 +201,14 @@ class SynthesisService {
     return JSON.parse(data.choices[0].message.content);
   }
 
-  private async callMistral(modelConfig: ModelInfo, apiKey: string, prompt: string): Promise<SynthesisResult> {
+  private async callOpenRouter(modelConfig: ModelInfo, apiKey: string, prompt: string): Promise<SynthesisResult> {
     const response = await fetch(modelConfig.endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
+        'Authorization': `Bearer ${apiKey}`,
+        'HTTP-Referer': 'https://promptlab.ai',
+        'X-Title': 'Prompt Lab v2'
       },
       body: JSON.stringify({
         model: modelConfig.id,
@@ -230,78 +228,11 @@ class SynthesisService {
 
     if (!response.ok) {
       const error = await response.text();
-      throw new Error(`Mistral API error: ${response.statusText} - ${error}`);
+      throw new Error(`OpenRouter API error: ${response.statusText} - ${error}`);
     }
 
     const data = await response.json();
     return JSON.parse(data.choices[0].message.content);
-  }
-
-  private async callDeepSeek(modelConfig: ModelInfo, apiKey: string, prompt: string): Promise<SynthesisResult> {
-    const response = await fetch(modelConfig.endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: modelConfig.id,
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a prompt synthesis assistant. Output ONLY valid JSON with this structure: { "insights": [{ "title": "string", "desc": "string" }], "finalPrompt": "string" }'
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        response_format: { type: 'json_object' }
-      })
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`DeepSeek API error: ${response.statusText} - ${error}`);
-    }
-
-    const data = await response.json();
-    return JSON.parse(data.choices[0].message.content);
-  }
-
-  private async callMeta(modelConfig: ModelInfo, apiKey: string, prompt: string): Promise<SynthesisResult> {
-    const response = await fetch(modelConfig.endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a prompt synthesis assistant. Output ONLY valid JSON with this structure: { "insights": [{ "title": "string", "desc": "string" }], "finalPrompt": "string" }'
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        temperature: 0.3,
-        max_tokens: 4096
-      })
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Meta/Llama API error: ${response.statusText} - ${error}`);
-    }
-
-    const data = await response.json();
-    const content = data.choices[0].message.content;
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('Could not parse Meta response');
-    return JSON.parse(jsonMatch[0]);
   }
 
   private buildHistory(session: WorkshopSession): string {

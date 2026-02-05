@@ -1,8 +1,15 @@
-import { useState } from 'react';
-import { Zap, Code, User, Upload, CheckCircle, Loader2, Clock, XCircle } from 'lucide-react';
+import { useState, useCallback, useMemo } from 'react';
+import { Zap, Code, User, Upload, CheckCircle, Loader2, Clock, XCircle, Sparkles, FileText, DollarSign } from 'lucide-react';
 import { EngineCatalog } from './EngineCatalog';
 import { ImportContextModal } from './ImportContextModal';
+import { PersonaSelector } from './PersonaSelector';
+import { TemplateSelector } from './TemplateSelector';
+import { CostEstimate } from './CostEstimate';
+import { SmartSuggestions, ContextTip } from './SmartSuggestions';
+import { PERSONA_PRESETS } from '../../data/personas';
+import { calculateCost, estimateTokens } from '../../data/modelPricing';
 import { ClackyProjectContext } from '../../types';
+import { INDUSTRY_TEMPLATES } from '../../data/industryTemplates';
 
 interface EditorProps {
   promptData: { system: string; user: string };
@@ -29,12 +36,53 @@ export function Editor({
 }: EditorProps) {
   const [showImportModal, setShowImportModal] = useState(false);
   const [activeField, setActiveField] = useState<'system' | 'user' | null>(null);
+  const [selectedPersonas, setSelectedPersonas] = useState<string[]>([]);
+  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
 
+  // Calculate metrics
   const systemChars = promptData.system.length;
   const userChars = promptData.user.length;
-  const estimatedTokens = Math.ceil((systemChars + userChars) / 4);
+  const estimatedInputTokens = Math.ceil((systemChars + userChars) / 4);
+  const estimatedOutputTokens = Math.ceil(estimatedInputTokens * 0.3); // Assume 30% of input
+  
+  const estimatedTokens = useMemo(() => 
+    estimateTokens(promptData.system + promptData.user),
+    [promptData]
+  );
 
   const canStartWorkshop = selectedModels.length >= 2 && promptData.user.trim().length > 0;
+
+  // Handle persona application to system prompt
+  const handleApplyPersona = useCallback((personaId: string) => {
+    const persona = PERSONA_PRESETS[personaId];
+    if (persona) {
+      // Prepend persona instruction to system prompt
+      const newSystemPrompt = persona.instruction + '\n\n' + promptData.system;
+      onChange({ ...promptData, system: newSystemPrompt });
+    }
+  }, [promptData, onChange]);
+
+  // Handle template application to user prompt
+  const handleApplyTemplate = useCallback((template: typeof INDUSTRY_TEMPLATES[keyof typeof INDUSTRY_TEMPLATES]) => {
+    const exampleQuery = template.exampleQueries[0] || '';
+    const newUserPrompt = promptData.user + '\n\n' + exampleQuery;
+    onChange({ ...promptData, user: newUserPrompt });
+  }, [promptData, onChange]);
+
+  // Handle suggestion insertion
+  const handleInsertSuggestion = useCallback((text: string, position: 'before' | 'after' | 'replace') => {
+    if (activeField === 'system') {
+      const newSystemPrompt = position === 'after' 
+        ? promptData.system + '\n\n' + text
+        : text;
+      onChange({ ...promptData, system: newSystemPrompt });
+    } else if (activeField === 'user') {
+      const newUserPrompt = position === 'after'
+        ? promptData.user + '\n\n' + text
+        : text;
+      onChange({ ...promptData, user: newUserPrompt });
+    }
+  }, [promptData, activeField, onChange]);
 
   return (
     <div className="max-w-7xl mx-auto space-y-8 p-6 animate-in fade-in duration-500">
@@ -56,6 +104,15 @@ export function Editor({
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Cost Estimate Badge */}
+          <div className="hidden lg:block">
+            <CostEstimate
+              selectedModels={selectedModels}
+              inputTokens={estimatedInputTokens}
+              outputTokens={estimatedOutputTokens}
+            />
+          </div>
+          
           {/* Import Context Button */}
           <button
             onClick={() => setShowImportModal(true)}
@@ -86,6 +143,15 @@ export function Editor({
         </div>
       </div>
 
+      {/* Mobile Cost Estimate */}
+      <div className="lg:hidden">
+        <CostEstimate
+          selectedModels={selectedModels}
+          inputTokens={estimatedInputTokens}
+          outputTokens={estimatedOutputTokens}
+        />
+      </div>
+
       {/* Context Badge */}
       {clackyContext && (
         <div className="bg-purple-50 border-2 border-purple-100 rounded-2xl p-4 flex items-center gap-3">
@@ -109,6 +175,23 @@ export function Editor({
         </div>
       )}
 
+      {/* Quick Selectors Row */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Persona Selector */}
+        <PersonaSelector
+          selectedPersonas={selectedPersonas}
+          onPersonaSelect={setSelectedPersonas}
+          onApplyPersona={handleApplyPersona}
+        />
+
+        {/* Template Selector */}
+        <TemplateSelector
+          selectedTemplate={selectedTemplate}
+          onTemplateSelect={setSelectedTemplate}
+          onApplyTemplate={handleApplyTemplate}
+        />
+      </div>
+
       {/* Dual Editor */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* System Prompt */}
@@ -118,9 +201,16 @@ export function Editor({
               <Code size={14} />
               System Persona
             </label>
-            <span className="text-xs text-slate-400 font-mono">
-              {systemChars.toLocaleString()} chars
-            </span>
+            <div className="flex items-center gap-2">
+              {selectedPersonas.slice(0, 2).map(id => (
+                <span key={id} className="text-lg" title={PERSONA_PRESETS[id]?.name}>
+                  {PERSONA_PRESETS[id]?.icon}
+                </span>
+              ))}
+              <span className="text-xs text-slate-400 font-mono">
+                {systemChars.toLocaleString()} chars
+              </span>
+            </div>
           </div>
           <textarea
             value={promptData.system}
@@ -134,6 +224,17 @@ export function Editor({
                 : 'bg-slate-50 border-slate-300 focus:bg-white focus:border-indigo-200 shadow-sm'
             }`}
           />
+          
+          {/* Smart Suggestions for System Field */}
+          <SmartSuggestions
+            inputText={promptData.system}
+            onInsertSuggestion={handleInsertSuggestion}
+            field="system"
+            selectedModels={selectedModels}
+          />
+          
+          {/* Context Tip */}
+          <ContextTip inputText={promptData.system} field="system" />
         </div>
 
         {/* User Prompt */}
@@ -159,12 +260,23 @@ export function Editor({
                 : 'bg-slate-50 border-slate-300 focus:bg-white focus:border-indigo-200 shadow-sm'
             }`}
           />
+          
+          {/* Smart Suggestions for User Field */}
+          <SmartSuggestions
+            inputText={promptData.user}
+            onInsertSuggestion={handleInsertSuggestion}
+            field="user"
+            selectedModels={selectedModels}
+          />
+          
+          {/* Context Tip */}
+          <ContextTip inputText={promptData.user} field="user" />
         </div>
       </div>
 
       {/* Stats Bar */}
-      <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
-        <div className="flex items-center gap-6 text-xs">
+      <div className="flex flex-wrap items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 gap-4">
+        <div className="flex flex-wrap items-center gap-6 text-xs">
           <div>
             <span className="font-black text-slate-400 uppercase tracking-widest">Total Chars</span>
             <span className="ml-2 font-bold text-slate-700">{(systemChars + userChars).toLocaleString()}</span>
@@ -174,17 +286,35 @@ export function Editor({
             <span className="ml-2 font-bold text-slate-700">~{estimatedTokens.toLocaleString()}</span>
           </div>
           <div>
-            <span className="font-black text-slate-400 uppercase tracking-widest">Models Selected</span>
+            <span className="font-black text-slate-400 uppercase tracking-widest">Models</span>
             <span className="ml-2 font-bold text-indigo-600">{selectedModels.length}</span>
+          </div>
+          <div>
+            <span className="font-black text-slate-400 uppercase tracking-widest">Personas</span>
+            <span className="ml-2 font-bold text-purple-600">{selectedPersonas.length}</span>
           </div>
         </div>
 
-        {!canStartWorkshop && (
-          <div className="text-xs text-amber-600 font-bold flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-            {selectedModels.length < 2 ? 'Select at least 2 models' : 'Enter a user task'}
-          </div>
-        )}
+        {/* Quick Cost Badge */}
+        <div className="flex items-center gap-3">
+          {selectedModels.length > 0 && (
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 rounded-lg">
+              <DollarSign size={14} className="text-emerald-400" />
+              <span className="text-xs font-black text-white">
+                ${selectedModels.reduce((sum, id) => 
+                  sum + calculateCost(id, estimatedInputTokens, estimatedOutputTokens).totalCost, 0
+                ).toFixed(4)}
+              </span>
+            </div>
+          )}
+          
+          {!canStartWorkshop && (
+            <div className="text-xs text-amber-600 font-bold flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+              {selectedModels.length < 2 ? 'Select at least 2 models' : 'Enter a user task'}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Loading Progress Indicator */}

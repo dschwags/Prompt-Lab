@@ -7,19 +7,24 @@ import { SynthesisPanel } from './components/Workshop/SynthesisPanel';
 import { SettingsModal } from './components/Settings/SettingsModal';
 import { WinnerActionModal } from './components/Workshop/WinnerActionModal';
 import { ModelReplacementModal } from './components/Workshop/ModelReplacementModal';
-import { WorkspacePanel } from './components/Workspace/WorkspacePanel';
 import { LoginScreen } from './components/Auth/LoginScreen';
+import { WelcomeScreen, AboutModal } from './components/Auth/WelcomeScreen';
+import { checkAuth, getThread, createThread, type AuthStatus } from './services/workspace-api';
 import { storageService } from './services/storage.service';
 import { apiService } from './services/api.service';
 import { feedbackService } from './services/feedback.service';
 import { exportSessionAsMarkdown, downloadAsFile } from './services/export.service';
-import { checkAuth, getThread, createThread } from './services/workspace-api';
 import { generateId, getFlagByProvider } from './utils/format';
 import { assignModelColor } from './config/model-colors';
 
 export default function App() {
   // === Authentication State ===
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null);
+  const isAuthDisabled = authStatus?.disabled === true;
+  const isAuthenticated = authStatus?.authenticated === true;
+
+  // === About Modal ===
+  const [showAbout, setShowAbout] = useState(false);
 
   // === Settings & Configuration ===
   const [settings, setSettings] = useState<Settings>({
@@ -28,9 +33,9 @@ export default function App() {
   });
   const [showSettings, setShowSettings] = useState(false);
 
-  // === Workspace State ===
-  const [workspacePanelOpen, setWorkspacePanelOpen] = useState(false);
-  const [activeProject, setActiveProject] = useState<string | null>(null);
+  // === Workspace State (Coming Soon) ===
+  // const [workspacePanelOpen, setWorkspacePanelOpen] = useState(false);
+  // const [activeProject, setActiveProject] = useState<string | null>(null);
 
   // === Session State ===
   const [session, setSession] = useState<WorkshopSession | null>(null);
@@ -63,12 +68,12 @@ export default function App() {
 
   // === Authentication Check ===
   useEffect(() => {
-    checkAuth().then(setIsAuthenticated);
+    checkAuth().then(setAuthStatus);
   }, []);
 
   // === Load settings and session on mount ===
   useEffect(() => {
-    if (isAuthenticated === false) return;
+    if (!isAuthenticated) return;
 
     const savedSettings = storageService.loadSettings();
     if (savedSettings) {
@@ -94,7 +99,25 @@ export default function App() {
   // === Handlers ===
 
   const handleLogin = () => {
-    setIsAuthenticated(true);
+    setAuthStatus({ authenticated: true });
+  };
+
+  const handleEnter = () => {
+    // Enter Prompt Lab - load settings and check for existing session
+    const savedSettings = storageService.loadSettings();
+    if (savedSettings) {
+      setSettings(savedSettings);
+    }
+
+    const savedSession = storageService.loadSession();
+    if (savedSession) {
+      setSession(savedSession);
+      setPromptData(savedSession.promptData);
+      setSelectedModels(savedSession.selectedModels);
+      setClackyContext(savedSession.clackyContext);
+    }
+
+    setAuthStatus({ authenticated: true });
   };
 
   const handleSaveSettings = (newSettings: Settings) => {
@@ -102,37 +125,33 @@ export default function App() {
     storageService.saveSettings(newSettings);
   };
 
-  // Workspace handlers
-  const handleSelectFile = (project: string, filePath: string, content: string) => {
-    setActiveProject(project);
-    // Insert file content into system persona
-    setPromptData(prev => ({
-      ...prev,
-      system: prev.system + `\n\n// From ${project}/${filePath}\n${content}`
-    }));
-  };
+  // === Workspace Handlers (Coming Soon) ===
+  // const handleSelectFile = (project: string, filePath: string, content: string) => {
+  //   setActiveProject(project);
+  //   setPromptData(prev => ({
+  //     ...prev,
+  //     system: prev.system + `\n\n// From ${project}/${filePath}\n${content}`
+  //   }));
+  // };
 
-  const handleSelectThread = async (threadId: string) => {
-    if (!activeProject) return;
-    
-    const thread = await getThread(activeProject, threadId);
-    if (thread) {
-      // Load thread data into session
-      setPromptData({ system: thread.systemPersona, user: thread.userTask });
-      setSelectedModels(thread.modelIds || []);
-    }
-  };
+  // const handleSelectThread = async (threadId: string) => {
+  //   if (!activeProject) return;
+  //   const thread = await getThread(activeProject, threadId);
+  //   if (thread) {
+  //     setPromptData({ system: thread.systemPersona, user: thread.userTask });
+  //     setSelectedModels(thread.modelIds || []);
+  //   }
+  // };
 
-  const handleNewThread = async () => {
-    if (!activeProject) return;
-    
-    await createThread(activeProject, {
-      title: 'New Session',
-      systemPersona: promptData.system,
-      userTask: promptData.user,
-      modelIds: selectedModels
-    });
-  };
+  // const handleNewThread = async () => {
+  //   if (!activeProject) return;
+  //   await createThread(activeProject, {
+  //     title: 'New Session',
+  //     systemPersona: promptData.system,
+  //     userTask: promptData.user,
+  //     modelIds: selectedModels
+  //   });
+  // };
 
   // Start a new workshop session
   const handleStartWorkshop = async () => {
@@ -159,11 +178,13 @@ export default function App() {
         setLoadingProgress(prev => ({ ...prev, [modelId]: 'loading' }));
 
         try {
-          // Determine provider from model ID
+          // Determine provider from model ID (format: provider/model-name)
           let provider: 'anthropic' | 'openai' | 'google' | 'openrouter' = 'openrouter';
-          if (modelId.startsWith('claude')) provider = 'anthropic';
-          else if (modelId.startsWith('gpt')) provider = 'openai';
-          else if (modelId.startsWith('gemini')) provider = 'google';
+          const providerPrefix = modelId.split('/')[0];
+          if (providerPrefix === 'anthropic') provider = 'anthropic';
+          else if (providerPrefix === 'openai') provider = 'openai';
+          else if (providerPrefix === 'google') provider = 'google';
+          // All other providers (deepseek, meta-llama, mistralai, etc.) use OpenRouter
 
           // Build system message with optional Clacky context
           let systemMessage = promptData.system;
@@ -326,10 +347,13 @@ export default function App() {
         setLoadingProgress(prev => ({ ...prev, [modelId]: 'loading' }));
 
         try {
+          // Determine provider from model ID (format: provider/model-name)
           let provider: 'anthropic' | 'openai' | 'google' | 'openrouter' = 'openrouter';
-          if (modelId.startsWith('claude')) provider = 'anthropic';
-          else if (modelId.startsWith('gpt')) provider = 'openai';
-          else if (modelId.startsWith('gemini')) provider = 'google';
+          const providerPrefix = modelId.split('/')[0];
+          if (providerPrefix === 'anthropic') provider = 'anthropic';
+          else if (providerPrefix === 'openai') provider = 'openai';
+          else if (providerPrefix === 'google') provider = 'google';
+          // All other providers (deepseek, meta-llama, mistralai, etc.) use OpenRouter
 
           let systemMessage = promptData.system;
           if (clackyContext) {
@@ -770,27 +794,52 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      {/* Login Screen */}
-      {isAuthenticated === false ? (
+      {/* Auth: Disabled - Show Welcome Screen */}
+      {isAuthDisabled && (
+        <>
+          <WelcomeScreen 
+            onEnter={handleEnter} 
+            onLearnMore={() => setShowAbout(true)} 
+            settings={settings}
+            onSaveSettings={handleSaveSettings}
+          />
+          <AboutModal 
+            isOpen={showAbout} 
+            onClose={() => setShowAbout(false)} 
+          />
+        </>
+      )}
+
+      {/* Auth: Enabled but not logged in - Show Login */}
+      {!isAuthDisabled && isAuthenticated === false && (
         <LoginScreen onLogin={handleLogin} />
-      ) : isAuthenticated === null ? (
+      )}
+
+      {/* Auth: Checking... */}
+      {!isAuthDisabled && authStatus === null && (
         <div className="flex items-center justify-center min-h-screen">
           <div className="animate-pulse text-slate-400">Checking authentication...</div>
         </div>
-      ) : (
+      )}
+
+      {/* Auth: Authenticated - Show App */}
+      {!isAuthDisabled && isAuthenticated && (
         <>
           {/* Top Navigation */}
           <nav className="bg-white border-b border-slate-100 sticky top-0 z-40 shadow-sm">
             <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
-              <div className="flex items-center gap-3">
+              <button
+                onClick={() => setAuthStatus({ authenticated: false })}
+                className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+              >
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center text-white font-black text-lg shadow-lg">
                   P
                 </div>
-                <div>
+                <div className="text-left">
                   <h1 className="font-black text-slate-900 tracking-tight">Prompt Lab</h1>
                   <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">v2.0</p>
                 </div>
-              </div>
+              </button>
 
               <div className="flex items-center gap-4">
                 {session && (
@@ -820,18 +869,18 @@ export default function App() {
                   </>
                 )}
 
-                <button
-                  onClick={() => setWorkspacePanelOpen(!workspacePanelOpen)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-black transition-colors border ${
-                    workspacePanelOpen
-                      ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
-                      : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-                  }`}
-                  title="Browse projects and sessions"
-                >
-                  <Folder size={16} />
-                  <span>Workspace</span>
-                </button>
+                <div className="relative group cursor-not-allowed">
+                  <button
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-black border border-dashed border-slate-300 text-slate-400"
+                    title="Coming soon"
+                  >
+                    <Folder size={16} />
+                    <span>Workspace</span>
+                    <span className="absolute -top-2 -right-2 px-1.5 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-black uppercase tracking-wider rounded">
+                      Coming Soon
+                    </span>
+                  </button>
+                </div>
 
                 <button
                   onClick={() => setShowSettings(true)}
@@ -844,18 +893,6 @@ export default function App() {
               </div>
             </div>
           </nav>
-
-          {/* Workspace Panel */}
-          {workspacePanelOpen && (
-            <div className="border-b border-slate-200">
-              <WorkspacePanel
-                activeProject={activeProject}
-                onSelectFile={handleSelectFile}
-                onSelectThread={handleSelectThread}
-                onNewThread={handleNewThread}
-              />
-            </div>
-          )}
 
           {/* Main Content */}
           <main className="py-8">

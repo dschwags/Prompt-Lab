@@ -89,12 +89,20 @@ export async function logout(): Promise<void> {
   await fetch(`${API_BASE}/auth/logout`, { method: 'POST' });
 }
 
-export async function checkAuth(): Promise<boolean> {
+export interface AuthStatus {
+  authenticated: boolean;
+  disabled?: boolean;
+}
+
+export async function checkAuth(): Promise<AuthStatus> {
   try {
     const res = await fetch(`${API_BASE}/auth/status`);
-    return res.ok;
+    if (!res.ok) {
+      return { authenticated: false };
+    }
+    return await res.json();
   } catch {
-    return false;
+    return { authenticated: false };
   }
 }
 
