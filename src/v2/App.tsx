@@ -68,7 +68,15 @@ export default function App() {
 
   // === Authentication Check ===
   useEffect(() => {
-    checkAuth().then(setAuthStatus);
+    checkAuth().then((status) => {
+      // If API call fails (no server), treat as auth disabled
+      if (!status || (!status.authenticated && !status.disabled)) {
+        // Server not available - disable auth and load directly
+        setAuthStatus({ authenticated: true, disabled: true });
+      } else {
+        setAuthStatus(status);
+      }
+    });
   }, []);
 
   // === Load settings and session on mount ===
