@@ -18,6 +18,7 @@ import path from 'path';
 import { setupAuthRoutes, authMiddleware } from './auth.js';
 import { setupProjectRoutes } from './project-files.js';
 import { setupThreadRoutes } from './thread-service.js';
+import { setupStaticFileServing } from './serve-static.js';
 
 const PORT = process.env.PORT || 3001;
 const WORKSPACE_DIR = process.env.WORKSPACE_DIR || '/home/runner/workspace';
@@ -60,6 +61,9 @@ app.use('/api/', authMiddleware);
 // Setup workspace routes
 setupProjectRoutes(app, WORKSPACE_DIR);
 setupThreadRoutes(app, WORKSPACE_DIR);
+
+// Setup static file serving
+setupStaticFileServing(app, express);
 
 // Error handling
 app.use((err, req, res, next) => {
